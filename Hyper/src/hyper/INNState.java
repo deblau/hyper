@@ -20,4 +20,8 @@ class INNState
 
 	// Phase 1 state of the INN, used for protocol state validation
 	CubeMessage.Type state = CubeMessage.Type.CONN_EXT_INN_REQ;
+
+	INNState(SocketChannel chan) {
+		this.chan = chan;
+	}
 }

@@ -1,9 +1,9 @@
 package hyper;
 
 import java.io.IOException;
-import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -54,11 +54,11 @@ import java.util.HashMap;
  * <p>
  * The Cube protocol uses a modified version of Katseff's Algorithm 3 for routing, and of Algorithm 6 for broadcast
  * messaging. In particular, Katseff's Algorithm 3 assumes that there is no route backtracking; that is, that there
- * always exists a link between a given node and the destination that has one fewer bit of relative address. It is
- * simple to construct counterexamples, especially considering that nodes may come and go at any time, an issue for
- * which Katseff did not have to account. Therefore, the Cube protocol provides a route discovery mechanism that employs
- * backtracking, used for initial and broken contacts between nodes, and a route caching mechanism for subsequent
- * contacts.
+ * always exists a link between a given node and the destination that has one fewer bit of relative address, given an
+ * arbitrary prior path state. It is simple to construct counterexamples, especially considering that nodes may come and
+ * go at any time, an issue for which Katseff did not have to account. Therefore, the Cube protocol provides a route
+ * discovery mechanism that employs backtracking, used for initial and broken contacts between nodes, and a route
+ * caching mechanism for subsequent contacts.
  * </p>
  * 
  * <p>
@@ -169,6 +169,9 @@ public class CubeProtocol
 		System.err.println(Thread.currentThread() + " " + msg);
 
 		switch (msg.getType()) {
+		case CONN_ANN_EXT_CONN_SUCC:
+			conn_ann_ext_conn_succ(msg);
+			break;
 		case CONN_ANN_EXT_OFFER:
 			conn_ann_ext_offer(msg);
 			break;
@@ -219,9 +222,6 @@ public class CubeProtocol
 			break;
 		case CONN_INN_EXT_CONN_REFUSED:
 			conn_inn_ext_conn_refused(msg);
-			break;
-		case CONN_ANN_EXT_CONN_SUCC:
-			conn_ann_ext_conn_succ(msg);
 			break;
 		case CONN_NEI_ANN_ACK:
 			conn_nei_ann_ack(msg);
@@ -275,15 +275,30 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Client must respond to completing the Cube connection.
+	 * Client must respond to ANN indication that connection has finished.
 	 * 
-	 * Algorithm: store the Cube's dimension and close the connection to the INN and ANN.
+	 * Algorithm: store the Cube's dimension and close the connection to the INN and ANN
 	 */
 	private void conn_ann_ext_conn_succ(CubeMessage msg) throws IOException
 	{
+		// Ensure the message is properly formatted
+		cltState.annChan = msg.getChannel();
+		CubeAddress none = CubeAddress.NO_ADDRESS;
+		if (!checkMsg(msg, null, cubeState.addr, Integer.class))
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, msg).send(cltState.annChan);
+			cltState.annChan.close();
+			return;
+		}
+
 		// Ensure we are in the correct state
 		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { cltState.state, CubeMessage.Type.CONN_ANN_EXT_OFFER }).send(cltState.annChan);
+			cltState.annChan.close();
 			return;
+		}
 
 		// Set the dimension and clean up
 		cubeState.dim = (int) msg.getData();
@@ -295,24 +310,27 @@ public class CubeProtocol
 	/**
 	 * Client must respond to an offer of a new CubeAddress from an ANN.
 	 * 
-	 * Algorithm: reply that the offer is accepted.
-	 * 
-	 * @throws IOException
+	 * Algorithm: acknowledge the offer
 	 */
 	@SuppressWarnings("unchecked")
 	private void conn_ann_ext_offer(CubeMessage msg) throws IOException
 	{
-		// Ensure we are in the correct state
-		if (cltState.state != CubeMessage.Type.CONN_EXT_INN_REQ)
-			return;
-		cltState.annChan = msg.getChannel();
-
 		// Ensure the message is properly formatted
+		cltState.annChan = msg.getChannel();
 		CubeAddress none = CubeAddress.NO_ADDRESS;
-		if (!msg.getSrc().equals(none) || !(msg.getDst() instanceof CubeAddress)
-				|| !(msg.getData() instanceof ArrayList<?>))
+		if (!checkMsg(msg, none, null, ArrayList.class))
 		{
 			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, msg).send(cltState.annChan);
+			cltState.annChan.close();
+			return;
+		}
+
+		// Ensure we are in the correct state
+		if (cltState.state != CubeMessage.Type.CONN_EXT_INN_REQ)
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { cltState.state, CubeMessage.Type.CONN_ANN_EXT_OFFER }).send(cltState.annChan);
+			cltState.annChan.close();
 			return;
 		}
 
@@ -326,7 +344,7 @@ public class CubeProtocol
 	/**
 	 * INN must respond to an indication of successful address negotiation from an ANN.
 	 * 
-	 * Algorithm:
+	 * Algorithm: Close the client SocketChannel
 	 */
 	private void conn_ann_inn_succ(CubeMessage msg)
 	{
@@ -334,42 +352,77 @@ public class CubeProtocol
 
 	}
 
+	/**
+	 * INN must respond to node unable to be ANN.
+	 * 
+	 * Algorithm: ask a different node at the same hop count to be ANN; if none remain, increase the hop count
+	 */
 	private void conn_ann_inn_unable(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * INN must respond to node unwilling to be ANN.
+	 * 
+	 * Algorithm: ask a different node at the same hop count to be ANN; if none remain, increase the hop count
+	 */
 	private void conn_ann_inn_unwilling(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * Neighbor must respond to ANN instruction to advertise CubeAddress to client.
+	 * 
+	 * Algorithm: send CubeAddress to client
+	 */
 	private void conn_ann_nei_adv(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * Neighbor must respond to ANN indication that a different neighbor did not connect to the client.
+	 * 
+	 * Algorithm: clean up connection state
+	 */
 	private void conn_ann_nei_fail(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * Neighbor must respond to ANN instruction /not/ to advertise CubeAddress to client.
+	 * 
+	 * Algorithm: clean up connection state, including disconnecting client if already connected
+	 */
 	private void conn_ann_nei_nadv(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * Neighbor must respond to ANN request for willingness to connect.
+	 * 
+	 * Algorithm: return whether neighbor is willing
+	 */
 	private void conn_ann_nei_req(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * Neighbor must respond to ANN indication that all neighbors have successfully connected.
+	 * 
+	 * Algorithm: clean up connection state
+	 */
 	private void conn_ann_nei_succ(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
@@ -377,11 +430,9 @@ public class CubeProtocol
 	}
 
 	/**
-	 * ANN must respond to acknowledgment of {@link CubeAddress} from client.
+	 * ANN must respond to acknowledgment of CubeAddress from client.
 	 * 
-	 * Algorithm: instruct new neighbors to contact the client to verify nonces.
-	 * 
-	 * @throws IOException
+	 * Algorithm: instruct new neighbors to contact the client to verify nonces
 	 */
 	private void conn_ext_ann_ack(CubeMessage msg) throws IOException
 	{
@@ -407,9 +458,9 @@ public class CubeProtocol
 	}
 
 	/**
-	 * ANN must respond to declining of {@link CubeAddress} from client.
+	 * ANN must respond to declining of CubeAddress from client.
 	 * 
-	 * @throws IOException
+	 * Algorithm: indicate this fact to INN
 	 */
 	private void conn_ext_ann_nak(CubeMessage msg) throws IOException
 	{
@@ -424,39 +475,44 @@ public class CubeProtocol
 	private void conn_ext_inn_req(CubeMessage msg) throws IOException
 	{
 		// Ensure the message is properly formatted
-		if (!checkMsg(msg, CubeAddress.NO_ADDRESS, CubeAddress.NO_ADDRESS, InetSocketAddress.class))
+		SocketChannel chan = msg.getChannel();
+		CubeAddress none = CubeAddress.NO_ADDRESS;
+		if (!checkMsg(msg, none, none, InetSocketAddress.class))
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, null).send(chan);
+			chan.close();
 			return;
+		}
 
 		// Ensure my state is correct
 		InetSocketAddress addr = (InetSocketAddress) msg.getData();
 		if (innStates.containsKey(addr))
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { innStates.get(addr).state, CubeMessage.Type.CONN_EXT_INN_REQ }).send(chan);
+			chan.close();
 			return;
-
-		// Record that I'm acting as INN for this request
-		INNState state = new INNState();
-		state.chan = msg.getChannel();
-		innStates.put(addr, state);
+		}
 
 		// Edge cases: I might be the only node in the Cube, or I might have an open slot
 		if (cubeState.dim == 0 || cubeState.dim > cubeState.neighbors.size())
 		{
-			join_to_INN(addr);
+			// Act as ANN and join the client directly to me
+			if (!expanding_join(addr))
+				new CubeMessage(CubeAddress.NO_ADDRESS, CubeAddress.NO_ADDRESS,
+						CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(chan);
+			// chan.close();
 			return;
 		}
 
-		// I'm not the only node. Bail in the unlikely event that all of my neighbors have disconnected.
-		if (cubeState.neighbors.isEmpty())
-		{
-			System.err.println("In conn_ext_inn_req() with no neighbors!");
-			System.exit(1);
-		}
-
-		// Send the initial broadcast messages
+		// Regular processing: initialize state and send the initial broadcast messages
+		innStates.put(addr, new INNState(chan));
 		for (Neighbor n : cubeState.neighbors)
 			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_INN_BCAST, addr));
 	}
 
-	private boolean join_to_INN(InetSocketAddress addr) throws IOException
+	// Expand the Cube by joining a connecting client to this node (acting as ANN)
+	private boolean expanding_join(InetSocketAddress addr) throws IOException
 	{
 		if (!amWilling(addr))
 			return false;
@@ -479,10 +535,7 @@ public class CubeProtocol
 		if (reply.getType() != CubeMessage.Type.CONN_EXT_ANN_ACK
 				|| !checkMsg(reply, peer, CubeAddress.NO_ADDRESS, null))
 		{
-			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
-					.send(innStates.get(addr).chan);
 			annChan.close();
-			innStates.remove(addr).chan.close();
 			return false;
 		}
 
@@ -493,51 +546,57 @@ public class CubeProtocol
 		if (reply.getType() != CubeMessage.Type.CONN_EXT_NEI_ACK
 				|| !checkMsg(reply, peer, CubeAddress.NO_ADDRESS, ArrayList.class))
 		{
-			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
-					.send(innStates.get(addr).chan);
 			annChan.close();
-			innStates.remove(addr).chan.close();
 			return false;
 		}
 		@SuppressWarnings("unchecked")
 		ArrayList<Integer> replyNonces = (ArrayList<Integer>) reply.getData();
 		if (replyNonces.size() != 1 || replyNonces.get(0) != nonce)
 		{
-			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
-					.send(innStates.get(addr).chan);
 			annChan.close();
-			innStates.remove(addr).chan.close();
 			return false;
 		}
 
 		// Okay, the new guy returned all of the correct nonces. Complete the handshake
 		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_NEI_EXT_ACK, null).send(nbrChan);
 		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_ANN_EXT_CONN_SUCC, 1).send(annChan);
-		innStates.remove(addr);
 
 		// Set up my neighbor information and Cube state
 		Neighbor n = new Neighbor(peer, nbrChan);
 		cubeState.dim++;
 		cubeState.neighbors.add(n);
 		cubeState.routeCache.put(peer, n);
-
-		// Add the new neighbor's channel to the listening set, and wait for new messages!
 		listener.register(nbrChan);
 		return true;
 	}
 
+	/**
+	 * Neighbor must respond to client acknowledging connection
+	 * 
+	 * Algorithm: if my nonce is listed, report negotiation success to ANN; otherwise, report negotiation failure
+	 */
 	private void conn_ext_nei_ack(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * ANN must respond to INN instruction to attach new client
+	 * 
+	 * Algorithm: attach the new client
+	 */
 	private void conn_inn_ann_expand(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * ANN must respond to INN instruction to become ANN.
+	 * 
+	 * Algorithm: initialize ANN state and contact prospective neighbors
+	 */
 	private void conn_inn_ann_handoff(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
@@ -545,7 +604,7 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Cube node must respond to INN request from client to connect.
+	 * Cube node must respond to INN request to become ANN and connect client.
 	 * 
 	 * Algorithm: determine whether I am able to connect, then whether I am willing to connect. Because the second
 	 * determination could potentially take some time, do it last. Reply to the INN with the result.
@@ -554,33 +613,40 @@ public class CubeProtocol
 	 */
 	private void conn_inn_bcast(CubeMessage msg) throws IOException
 	{
-		// Ensure we are in the correct state
-
-		if (msg.getData() instanceof InetSocketAddress)
+		// Ensure the message is properly formatted
+		if (!checkMsg(msg, null, cubeState.addr, SocketAddress.class))
 		{
-			InetSocketAddress addr = (InetSocketAddress) msg.getData();
-
-			// Am I able to connect?
-			if (cubeState.neighbors.size() == cubeState.dim)
-			{
-				reply(msg, CubeMessage.Type.CONN_NODE_INN_UNABLE, addr);
-				return;
-			}
-
-			// Am I willing to connect?
-			if (amWilling(addr))
-				reply(msg, CubeMessage.Type.CONN_NODE_INN_ACK, addr);
-			else
-				reply(msg, CubeMessage.Type.CONN_NODE_INN_UNWILLING, addr);
-
-		} else
-		{
-			reply(msg, CubeMessage.Type.INVALID_MSG, msg);
+			reply(msg, CubeMessage.Type.INVALID_MSG, null);
+			return;
 		}
+
+		// Ensure we are in the correct state
+		InetSocketAddress addr = (InetSocketAddress) msg.getData();
+		if (annStates.containsKey(addr))
+		{
+			reply(msg, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { annStates.get(addr).state, CubeMessage.Type.CONN_INN_BCAST });
+			return;
+		}
+
+		// Am I able to connect?
+		if (cubeState.neighbors.size() == cubeState.dim)
+		{
+			reply(msg, CubeMessage.Type.CONN_NODE_INN_UNABLE, addr);
+			return;
+		}
+
+		// Am I willing to connect?
+		if (amWilling(addr))
+			reply(msg, CubeMessage.Type.CONN_NODE_INN_ACK, addr);
+		else
+			reply(msg, CubeMessage.Type.CONN_NODE_INN_UNWILLING, addr);
 	}
 
 	/**
 	 * Client must respond to denied Cube connection.
+	 * 
+	 * Algorithm: reset connection state
 	 */
 	private void conn_inn_ext_conn_refused(CubeMessage msg)
 	{
@@ -588,24 +654,45 @@ public class CubeProtocol
 		System.exit(1);
 	}
 
+	/**
+	 * ANN must respond to neighbor indication of willingness to connect to client.
+	 * 
+	 * Algorithm: record this fact, and if all neighbors have reported in, move to Phase 3
+	 */
 	private void conn_nei_ann_ack(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * ANN must respond to neighbor indication of failed SocketChannel to client.
+	 * 
+	 * Algorithm: instruct all neighbors to tear down their connections, and inform client and INN
+	 */
 	private void conn_nei_ann_fail(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * ANN must respond to neighbor indication of unwillingness to connect to client.
+	 * 
+	 * Algorithm: clean up state and inform INN
+	 */
 	private void conn_nei_ann_nak(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
 	}
 
+	/**
+	 * ANN must respond to neighbor indication of successful SocketChannel to client.
+	 * 
+	 * Algorithm: record this fact, and if all neighbors have reported in, instruct them to advertise their
+	 * CubeAddresses
+	 */
 	private void conn_nei_ann_succ(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
@@ -613,41 +700,75 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Client stores the new neighbor's {@link CubeAddress}
+	 * Client must respond to neighbor's indication of its CubeAddress
+	 * 
+	 * Algorithm: store this information
 	 */
 	private void conn_nei_ext_ack(CubeMessage msg) throws IOException
 	{
+		// Ensure the message is properly formatted
+		SocketChannel chan = msg.getChannel();
+		CubeAddress none = CubeAddress.NO_ADDRESS;
+		if (!checkMsg(msg, null, cubeState.addr, null))
+		{
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_MSG, msg).send(chan);
+			chan.close();
+			cltState.annChan.close();
+			return;
+		}
+
 		// Ensure we are in the correct state
 		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
+		{
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { cltState.state, CubeMessage.Type.CONN_NEI_EXT_ACK }).send(chan);
+			chan.close();
+			cltState.annChan.close();
 			return;
+		}
 
 		// Update the Cube state
-		Neighbor n = new Neighbor(msg.getSrc(), msg.getChannel());
+		Neighbor n = new Neighbor(msg.getSrc(), chan);
 		cubeState.neighbors.add(n);
 		cubeState.routeCache.put(msg.getSrc(), n);
 	}
 
 	/**
-	 * Client must respond to potential neighbor's offer to connect.
+	 * Client must respond to neighbor's offer to connect.
 	 * 
-	 * Algorithm: respond with the correct message (including the nonces), if we're willing to accept the connection.
+	 * Algorithm: respond with the correct message (including the nonces), if we're willing to accept the connection
 	 */
 	private void conn_nei_ext_offer(CubeMessage msg) throws IOException
 	{
+		// Ensure the message is properly formatted
+		SocketChannel chan = msg.getChannel();
+		CubeAddress none = CubeAddress.NO_ADDRESS;
+		if (!checkMsg(msg, none, cubeState.addr, null))
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, msg).send(chan);
+			chan.close();
+			cltState.annChan.close();
+			return;
+		}
+
 		// Ensure we are in the correct state
 		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
+		{
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { cltState.state, CubeMessage.Type.CONN_NEI_EXT_OFFER }).send(chan);
+			chan.close();
+			cltState.annChan.close();
 			return;
-		SocketChannel chan = msg.getChannel();
-		cltState.nbrChans.add(chan);
+		}
 
 		// Are we willing to make this connection?
+		cltState.nbrChans.add(chan);
 		if (amWilling((InetSocketAddress) chan.getLocalAddress()))
-			new CubeMessage(cubeState.addr, CubeAddress.NO_ADDRESS, CubeMessage.Type.CONN_EXT_NEI_ACK, cltState.nonces)
-					.send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NEI_ACK, cltState.nonces).send(chan);
 		else
 		{
-			// Close existing channels and wait for new ANN to contact me to try again (or INN with complete refusal)
-			new CubeMessage(cubeState.addr, CubeAddress.NO_ADDRESS, CubeMessage.Type.CONN_EXT_NEI_NAK, null).send(chan);
+			// Close existing channels and wait for new ANN to contact me to try again
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NEI_NAK, null).send(chan);
 			for (SocketChannel c : cltState.nbrChans)
 				c.close();
 			cltState.annChan.close();
@@ -655,20 +776,21 @@ public class CubeProtocol
 	}
 
 	/**
-	 * INN must respond to Cube node indicating acceptance to be ANN.
+	 * INN must respond to Cube node indicating willingness to be ANN.
 	 * 
-	 * Algorithm: hand off negotiation to Cube node to begin phase two once all Cube nodes have reported in.
+	 * Algorithm: hand off negotiation to Cube node to begin Phase 2
 	 */
 	private void conn_node_inn_ack(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
-		if (msg.getData() instanceof InetSocketAddress)
-		{
-			InetSocketAddress addr = (InetSocketAddress) msg.getData();
-		}
 	}
 
+	/**
+	 * INN must respond to Cube node indicating its inability to act as ANN.
+	 * 
+	 * Algorithm: record this fact, and determine whether to expand the Cube
+	 */
 	private void conn_node_inn_unable(CubeMessage msg) throws IOException
 	{
 		// Ensure we are in the correct state
@@ -681,6 +803,11 @@ public class CubeProtocol
 		check_expand(state, msg.getData());
 	}
 
+	/**
+	 * INN must respond to Cube node indicating its unwillingness to act as ANN.
+	 * 
+	 * Algorithm: record this fact, and determine whether to expand the Cube
+	 */
 	private void conn_node_inn_unwilling(CubeMessage msg) throws IOException
 	{
 		// Ensure we are in the correct state
@@ -725,7 +852,7 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Send a message through the Cube. Invokes the route caching and discovery.
+	 * Send a message through the Cube using (modified) Katseff Algorithm 3.
 	 */
 	void send(CubeMessage msg) throws IOException
 	{
@@ -756,12 +883,20 @@ public class CubeProtocol
 	}
 
 	/**
+	 * Broadcast a message through the Cube using (modified) Katseff Algorithm 6.
+	 */
+	void broadcast(CubeMessage msg)
+	{
+
+	}
+
+	/**
 	 * Ensure that a CubeMessage has the proper source, destination, and state
 	 */
-	private boolean checkMsg(CubeMessage msg, CubeAddress src, CubeAddress dst, Class clz)
+	private boolean checkMsg(CubeMessage msg, CubeAddress src, CubeAddress dst, Class<?> clz)
 	{
-		return msg.getSrc().equals(src) && msg.getDst().equals(dst)
-				&& (null == msg.getData() && null == clz || msg.getData().getClass().equals(clz));
+		return (src == null || msg.getSrc().equals(src)) && (dst == null || msg.getDst().equals(dst))
+				&& (null == clz || null != msg.getData() && msg.getData().getClass().equals(clz));
 	}
 
 	/**

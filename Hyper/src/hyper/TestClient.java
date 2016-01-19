@@ -9,10 +9,11 @@ public class TestClient
 	private MessageListener listener;
 	private CubeProtocol protocol;
 
-	public TestClient(int port) throws UnknownHostException, IOException
+	public TestClient(int port) throws UnknownHostException, IOException, InterruptedException
 	{
 		listener = new MessageListener(new InetSocketAddress(port), false);
 		listener.start();
+		Thread.sleep(1000);
 		protocol = new CubeProtocol();
 		listener.setProtocol(protocol);
 		protocol.setListener(listener);
@@ -39,6 +40,7 @@ public class TestClient
 		// First client
 		TestClient client1 = new TestClient(node0port+1000);
 		client1.request_join(node0port);
+		Thread.sleep(1000);
 		client1.send_data(CubeAddress.NODE_ZERO, "test data");
 
 		TestClient client2 = new TestClient(node0port+2000);
