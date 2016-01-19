@@ -34,7 +34,7 @@ public class TestClient
 		int node0port = 20000;
 		
 		// Set up initial node
-		TestClient node0 = new TestClient(node0port);
+		new TestClient(node0port);
 
 		// First client
 		TestClient client1 = new TestClient(node0port+1000);

@@ -1,6 +1,7 @@
 package hyper;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
@@ -166,8 +167,8 @@ public class CubeProtocol
 	void process(CubeMessage msg) throws IOException
 	{
 		System.err.println(Thread.currentThread() + " " + msg);
-		switch (msg.getType())
-		{
+
+		switch (msg.getType()) {
 		case CONN_ANN_EXT_OFFER:
 			conn_ann_ext_offer(msg);
 			break;
@@ -250,11 +251,16 @@ public class CubeProtocol
 			conn_node_inn_unwilling(msg);
 			break;
 		case DATA_MSG:
-			// System.err.println("Node at cube address " + msg.getSrc() + " sent me data: " + msg.getData());
+			// Lazy update of Cube dimension. Worst case scenario: a neighbor maliciously sends forged CubeMessages
+			// having ever-increasing source addresses. In this case, the neighbor will become able to support many new
+			// connections.
+			int len = msg.getSrc().bitCount();
+			if (len == cubeState.dim + 1)
+				cubeState.dim = len;
 			break;
 		case INVALID_MSG:
-			System.err.println(Thread.currentThread() + " received INVALID_MSG with data: (" + msg.getSrc() + "," + msg.getData()
-					+ "," + msg.getData());
+			System.err.println(Thread.currentThread() + " received INVALID_MSG with data: (" + msg.getSrc() + ","
+					+ msg.getData() + "," + msg.getData());
 			break;
 		case ROUTE_REQ:
 			break;
@@ -303,7 +309,8 @@ public class CubeProtocol
 
 		// Ensure the message is properly formatted
 		CubeAddress none = CubeAddress.NO_ADDRESS;
-		if (!msg.getSrc().equals(none) || !(msg.getDst() instanceof CubeAddress) || !(msg.getData() instanceof ArrayList<?>))
+		if (!msg.getSrc().equals(none) || !(msg.getDst() instanceof CubeAddress)
+				|| !(msg.getData() instanceof ArrayList<?>))
 		{
 			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, msg).send(cltState.annChan);
 			return;
@@ -395,7 +402,8 @@ public class CubeProtocol
 
 		// Send success message to the new neighbors
 		for (Neighbor n : cubeState.neighbors)
-			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_ANN_NEI_SUCC, msg.getChannel().getRemoteAddress()));
+			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_ANN_NEI_SUCC,
+					msg.getChannel().getRemoteAddress()));
 	}
 
 	/**
@@ -429,10 +437,10 @@ public class CubeProtocol
 		state.chan = msg.getChannel();
 		innStates.put(addr, state);
 
-		// Edge case: I might be the only node in the Cube!
-		if (0 == cubeState.dim)
+		// Edge cases: I might be the only node in the Cube, or I might have an open slot
+		if (cubeState.dim == 0 || cubeState.dim > cubeState.neighbors.size())
 		{
-			first_joiner(addr);
+			join_to_INN(addr);
 			return;
 		}
 
@@ -448,70 +456,74 @@ public class CubeProtocol
 			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_INN_BCAST, addr));
 	}
 
-	private void first_joiner(InetSocketAddress addr) throws IOException
+	private boolean join_to_INN(InetSocketAddress addr) throws IOException
 	{
-		if (amWilling(addr))
+		if (!amWilling(addr))
+			return false;
+
+		// Connect the new client manually, blocking as required (since nothing else can be going on anyway)
+		CubeAddress none = CubeAddress.NO_ADDRESS;
+		CubeAddress peer = new CubeAddress(cubeState.addr.setBit(cubeState.dim).toString());
+
+		// We have to separately connect to the client in our capacity as ANN to offer a connection
+		SocketChannel annChan = SocketChannel.open(addr);
+
+		// Send the first message (as ANN)
+		ArrayList<Integer> nonces = new ArrayList<>();
+		int nonce = (int) (Math.random() * Integer.MAX_VALUE);
+		nonces.add(nonce);
+		new CubeMessage(none, peer, CubeMessage.Type.CONN_ANN_EXT_OFFER, nonces).send(annChan);
+
+		// Receive and check the reply
+		CubeMessage reply = CubeMessage.recv(annChan);
+		if (reply.getType() != CubeMessage.Type.CONN_EXT_ANN_ACK
+				|| !checkMsg(reply, peer, CubeAddress.NO_ADDRESS, null))
 		{
-			// Connect the new client manually, blocking as required (since nothing else can be going on anyway)
-			CubeAddress none = CubeAddress.NO_ADDRESS;
-			CubeAddress one = new CubeAddress("1");
-
-			// We have to separately connect to the client in our capacity as ANN to offer a connection
-			SocketChannel annChan = SocketChannel.open(addr);
-
-			// Send the first message (as ANN)
-			ArrayList<Integer> nonces = new ArrayList<>();
-			int nonce = (int) (Math.random() * Integer.MAX_VALUE);
-			nonces.add(nonce);
-			new CubeMessage(none, one, CubeMessage.Type.CONN_ANN_EXT_OFFER, nonces).send(annChan);
-
-			// Receive and check the reply
-			CubeMessage reply = CubeMessage.recv(annChan);
-			if (reply.getType() != CubeMessage.Type.CONN_EXT_ANN_ACK || !checkMsg(reply, one, CubeAddress.NO_ADDRESS, null))
-			{
-				new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(innStates.get(addr).chan);
-				annChan.close();
-				innStates.remove(addr).chan.close();
-				return;
-			}
-
-			// Send an offer to connect (as a new neighbor)
-			SocketChannel nbrChan = SocketChannel.open(addr);
-			new CubeMessage(none, one, CubeMessage.Type.CONN_NEI_EXT_OFFER, null).send(nbrChan);
-			reply = CubeMessage.recv(nbrChan);
-			if (reply.getType() != CubeMessage.Type.CONN_EXT_NEI_ACK
-					|| !checkMsg(reply, one, CubeAddress.NO_ADDRESS, ArrayList.class))
-			{
-				new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(innStates.get(addr).chan);
-				annChan.close();
-				innStates.remove(addr).chan.close();
-				return;
-			}
-			@SuppressWarnings("unchecked")
-			ArrayList<Integer> replyNonces = (ArrayList<Integer>) reply.getData();
-			if (replyNonces.size() != 1 || replyNonces.get(0) != nonce)
-			{
-				new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(innStates.get(addr).chan);
-				annChan.close();
-				innStates.remove(addr).chan.close();
-				return;
-			}
-
-			// Okay, the new guy returned all of the correct nonces. Complete the handshake and bail
-			new CubeMessage(cubeState.addr, one, CubeMessage.Type.CONN_NEI_EXT_ACK, null).send(nbrChan);
-			new CubeMessage(cubeState.addr, one, CubeMessage.Type.CONN_ANN_EXT_CONN_SUCC, 1).send(annChan);
+			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
+					.send(innStates.get(addr).chan);
 			annChan.close();
 			innStates.remove(addr).chan.close();
-
-			// Set up my neighbor information and Cube state
-			Neighbor n = new Neighbor(one, nbrChan);
-			cubeState.dim = 1;
-			cubeState.neighbors.add(n);
-			cubeState.routeCache.put(one, n);
-
-			// Add the new neighbor's channel to the listening set, and wait for new messages!
-			listener.register(nbrChan);
+			return false;
 		}
+
+		// Send an offer to connect (as a new neighbor)
+		SocketChannel nbrChan = SocketChannel.open(addr);
+		new CubeMessage(none, peer, CubeMessage.Type.CONN_NEI_EXT_OFFER, null).send(nbrChan);
+		reply = CubeMessage.recv(nbrChan);
+		if (reply.getType() != CubeMessage.Type.CONN_EXT_NEI_ACK
+				|| !checkMsg(reply, peer, CubeAddress.NO_ADDRESS, ArrayList.class))
+		{
+			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
+					.send(innStates.get(addr).chan);
+			annChan.close();
+			innStates.remove(addr).chan.close();
+			return false;
+		}
+		@SuppressWarnings("unchecked")
+		ArrayList<Integer> replyNonces = (ArrayList<Integer>) reply.getData();
+		if (replyNonces.size() != 1 || replyNonces.get(0) != nonce)
+		{
+			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null)
+					.send(innStates.get(addr).chan);
+			annChan.close();
+			innStates.remove(addr).chan.close();
+			return false;
+		}
+
+		// Okay, the new guy returned all of the correct nonces. Complete the handshake
+		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_NEI_EXT_ACK, null).send(nbrChan);
+		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_ANN_EXT_CONN_SUCC, 1).send(annChan);
+		innStates.remove(addr);
+
+		// Set up my neighbor information and Cube state
+		Neighbor n = new Neighbor(peer, nbrChan);
+		cubeState.dim++;
+		cubeState.neighbors.add(n);
+		cubeState.routeCache.put(peer, n);
+
+		// Add the new neighbor's channel to the listening set, and wait for new messages!
+		listener.register(nbrChan);
+		return true;
 	}
 
 	private void conn_ext_nei_ack(CubeMessage msg)
