@@ -13,15 +13,10 @@ class CubeState
 
 	// My CubeAddress
 	CubeAddress addr = CubeAddress.NODE_ZERO;
-	
-	// The nonces I need to reply with when connecting
-	ArrayList<Double> nonces = new ArrayList<>();
 
-	// PROTOCOL TO HERE
-	
-	// My neighbor nodes
+	// My connected neighbor nodes
 	ArrayList<Neighbor> neighbors = new ArrayList<>();
-	
+
 	// Next-hop routing information
 	HashMap<CubeAddress, Neighbor> routeCache = new HashMap<>();
 }

@@ -1,6 +1,6 @@
 package hyper;
 
-import java.net.InetSocketAddress;
+import java.util.ArrayList;
 
 /**
  * State variables associated with acting as ANN. The {@link CubeProtocol} class includes a list of these, one for each
@@ -11,16 +11,17 @@ class ANNState
 	// Initiating INN
 	CubeAddress inn;
 
-	// Connecting client address
-	InetSocketAddress clientAddr;
+	// List of unable nodes
+	ArrayList<CubeAddress> unable = new ArrayList<>();
 
-	// Nonce to use with this client
-	double nonce;
+	// List of unwilling nodes
+	ArrayList<CubeAddress> unwilling = new ArrayList<>();
 
-	public ANNState(CubeAddress inn, InetSocketAddress clientAddr)
+	// Phase 2 state of the ANN, used for protocol state validation
+	CubeMessage.Type state = CubeMessage.Type.CONN_INN_ANN_HANDOFF;
+
+	public ANNState(CubeAddress inn)
 	{
 		this.inn = inn;
-		this.clientAddr = clientAddr;
-		nonce = Math.random();
 	}
 }

@@ -1,18 +1,21 @@
 package hyper;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.*;
 import java.util.ArrayList;
-import java.util.TreeMap;
 
 /**
  * Provides a {@link Selector} for all incoming communications.
  */
 public class MessageListener extends Thread
 {
-	// Our bound SocketAddress
+	// Our bound protocol address
 	private SocketAddress local;
+
+	// Our bound SOCKS5 address (if any)
+	private SocketAddress socks = new InetSocketAddress(1080);
 
 	/**
 	 * Returns the {@link SocketAddress} of the bound listener channel.
@@ -30,12 +33,6 @@ public class MessageListener extends Thread
 	// Whether we should shut down
 	private boolean shutdown = false;
 
-	// Map to keep track of connections and their associated timeouts
-	private TreeMap<Long, SocketChannel> timeoutMap = new TreeMap<Long, SocketChannel>();
-
-	// Delay (in millis) to wait until an accepted connection becomes stale
-	private final long acceptTimeout = 2000;
-
 	// CubeProtocol instance for dispatching messages
 	private CubeProtocol protocol = null;
 
@@ -51,7 +48,7 @@ public class MessageListener extends Thread
 	 *            A {@link SocketAddress} to which to bind the server socket, or <code>null</code> for the
 	 *            <code>anyLocal</code> address.
 	 */
-	public MessageListener(SocketAddress local)
+	public MessageListener(SocketAddress local, boolean socks)
 	{
 		try
 		{
@@ -63,6 +60,14 @@ public class MessageListener extends Thread
 			sel = Selector.open();
 			svrChan.configureBlocking(false);
 			svrChan.register(sel, SelectionKey.OP_ACCEPT);
+
+			if (socks)
+			{
+				ServerSocketChannel socksChan = ServerSocketChannel.open();
+				socksChan.bind(this.socks);
+				socksChan.configureBlocking(false);
+				socksChan.register(sel, SelectionKey.OP_ACCEPT);
+			}
 		}
 		catch (IOException e)
 		{
@@ -89,7 +94,6 @@ public class MessageListener extends Thread
 				long wait = 0;
 
 				// Wait for a channel to become active
-				// System.err.println(Thread.currentThread() + " waiting for " + wait + " millis");
 				int numKeys = sel.select(wait);
 				// System.err.println(Thread.currentThread() + " awake with " + numKeys + " keys");
 
@@ -146,26 +150,26 @@ public class MessageListener extends Thread
 	 * @throws IOException
 	 *             if there was an error closing a stale connection
 	 */
-	private long removeStales() throws IOException
-	{
-		while (true)
-		{
-			// If we have no active connections, wait indefinitely
-			if (timeoutMap.isEmpty())
-				return 0;
-
-			// Calculate whether the earliest connection is still fresh
-			long timestamp = timeoutMap.firstKey();
-			long wait = timestamp - System.currentTimeMillis();
-			if (wait > 0)
-				return wait;
-
-			// The earliest connection is stale. Remove and close it, then repeat.
-			SocketChannel sc = timeoutMap.remove(timestamp);
-			sc.keyFor(sel).cancel();
-			sc.close();
-		}
-	}
+	// private long removeStales() throws IOException
+	// {
+	// while (true)
+	// {
+	// // If we have no active connections, wait indefinitely
+	// if (timeoutMap.isEmpty())
+	// return 0;
+	//
+	// // Calculate whether the earliest connection is still fresh
+	// long timestamp = timeoutMap.firstKey();
+	// long wait = timestamp - System.currentTimeMillis();
+	// if (wait > 0)
+	// return wait;
+	//
+	// // The earliest connection is stale. Remove and close it, then repeat.
+	// SocketChannel sc = timeoutMap.remove(timestamp);
+	// sc.keyFor(sel).cancel();
+	// sc.close();
+	// }
+	// }
 
 	/**
 	 * Process selected keys.

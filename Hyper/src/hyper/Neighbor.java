@@ -13,19 +13,9 @@ class Neighbor
 	// The neighbor's SocketChannel
 	SocketChannel chan;
 
-	// The nonce to use when connecting
-	Double nonce;
-
-	/**
-	 * @param addr
-	 * @param chan
-	 * @param nonce
-	 */
-	public Neighbor(CubeAddress addr, SocketChannel chan, Double nonce)
+	public Neighbor(CubeAddress addr, SocketChannel chan)
 	{
-		super();
 		this.addr = addr;
 		this.chan = chan;
-		this.nonce = nonce;
 	}
 }
