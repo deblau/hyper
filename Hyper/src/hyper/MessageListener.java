@@ -48,8 +48,7 @@ public class MessageListener extends Thread
 	 *            A {@link SocketAddress} to which to bind the server socket, or <code>null</code> for the
 	 *            <code>anyLocal</code> address.
 	 */
-	public MessageListener(SocketAddress local, boolean socks)
-	{
+	public MessageListener(SocketAddress local, boolean socks) {
 		try
 		{
 			this.local = local;
@@ -68,8 +67,7 @@ public class MessageListener extends Thread
 				socksChan.configureBlocking(false);
 				socksChan.register(sel, SelectionKey.OP_ACCEPT);
 			}
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			e.printStackTrace();
 		}
@@ -107,12 +105,10 @@ public class MessageListener extends Thread
 
 				// We have some keys that need attention, process them
 				processKeys();
-			}
-			catch (IOException e)
+			} catch (IOException e)
 			{
 				e.printStackTrace();
-			}
-			catch (InterruptedException e)
+			} catch (InterruptedException e)
 			{
 				// Only happens if our Queue runs out of memory and we were interrupted trying to add to it
 				e.printStackTrace();
@@ -125,8 +121,7 @@ public class MessageListener extends Thread
 			try
 			{
 				key.channel().close();
-			}
-			catch (IOException e)
+			} catch (IOException e)
 			{
 				// Ignore errors
 			}
@@ -136,8 +131,7 @@ public class MessageListener extends Thread
 		try
 		{
 			sel.close();
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// Ignore errors
 		}
@@ -219,14 +213,22 @@ public class MessageListener extends Thread
 					key.cancel();
 					chan.configureBlocking(true);
 
-					// Perform the read
-					CubeMessage msg = CubeMessage.recv(chan);
+					try
+					{
+						// Perform the read
+						CubeMessage msg = CubeMessage.recv(chan);
 
-					// Schedule it for re-registration
-					reregister.add(chan);
+						// Schedule it for re-registration
+						reregister.add(chan);
 
-					// Now (finally!) we can process the message
-					protocol.process(msg);
+						// Now (finally!) we can process the message
+						protocol.process(msg);
+
+					} catch (Exception e)
+					{
+						e.printStackTrace();
+						chan.close();
+					}
 				} else
 				{
 					System.err.println(Thread.currentThread() + " goofy key: " + key.readyOps());

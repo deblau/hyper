@@ -9,10 +9,11 @@ public class TestClient
 	private MessageListener listener;
 	private CubeProtocol protocol;
 
-	public TestClient(int port) throws UnknownHostException, IOException
+	public TestClient(int port) throws UnknownHostException, IOException, InterruptedException
 	{
 		listener = new MessageListener(new InetSocketAddress(port), false);
 		listener.start();
+		Thread.sleep(1000);
 		protocol = new CubeProtocol();
 		listener.setProtocol(protocol);
 		protocol.setListener(listener);

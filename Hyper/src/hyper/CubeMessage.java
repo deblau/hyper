@@ -18,10 +18,15 @@ class CubeMessage implements Serializable
 	static ByteBuffer buf = ByteBuffer.allocate(2048);
 
 	// Message types
-	public enum Type
-	{
+	public enum Type {
 		// Invalid message
 		INVALID_MSG,
+
+		// Invalid state
+		// Src: varies
+		// Dest: varies
+		// Data: [current state, attempted transition state]
+		INVALID_STATE,
 
 		// Message (outside the Cube) from external client to ingress negotiation node (INN), requesting a CubeAddress
 		// Src: NO_ADDRESS
@@ -139,7 +144,7 @@ class CubeMessage implements Serializable
 
 		// Message (outside the Cube) from new neighbor to external client, offering to connect
 		// Src: NO_ADDRESS
-		// Dest: NO_ADDRESS
+		// Dest: client's CubeAddress
 		// Data: null
 		CONN_NEI_EXT_OFFER,
 
@@ -186,7 +191,7 @@ class CubeMessage implements Serializable
 		CONN_NEI_EXT_ACK,
 
 		// Message (outside the Cube) from ANN to client, confirming the connection and shutting down the link
-		// Src: INN
+		// Src: ANN
 		// Dest: client's CubeAddress
 		// Data: dimension of the cube
 		CONN_ANN_EXT_CONN_SUCC,
@@ -214,8 +219,8 @@ class CubeMessage implements Serializable
 	// Destination Cube address
 	private CubeAddress dst = CubeAddress.NO_ADDRESS;
 
-	// Is this a broadcast address?
-	private boolean isBcast = false;
+	// Path information used for route requests and broadcasts; see Katseff
+	private int travel = 0;
 
 	// Type of message
 	private Type type = Type.INVALID_MSG;
@@ -235,8 +240,7 @@ class CubeMessage implements Serializable
 	/*
 	 * For sending regular messages when the source and destination already have Cube addresses
 	 */
-	public CubeMessage(CubeAddress src, CubeAddress dst, Type type, Object data)
-	{
+	public CubeMessage(CubeAddress src, CubeAddress dst, Type type, Object data) {
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
@@ -267,17 +271,20 @@ class CubeMessage implements Serializable
 	 * @return the new {@link CubeMessage}
 	 * @throws IOException
 	 */
-	static CubeMessage recv(SocketChannel chan) throws IOException
+	static CubeMessage recv(SocketChannel chan)
 	{
 		try
 		{
 			CubeMessage msg = (CubeMessage) new ObjectInputStream(Channels.newInputStream(chan)).readObject();
 			msg.channel = chan;
 			return msg;
-		}
-		catch (ClassNotFoundException e)
+		} catch (ClassNotFoundException e)
 		{
 			e.printStackTrace();
+			return null;
+		} catch (IOException e)
+		{
+			System.err.println(Thread.currentThread() + " got IOException " + chan);
 			return null;
 		}
 	}
@@ -292,9 +299,14 @@ class CubeMessage implements Serializable
 		return dst;
 	}
 
-	public boolean isBcast()
+	public int getTravel()
 	{
-		return isBcast;
+		return travel;
+	}
+
+	public void setTravel(int travel)
+	{
+		this.travel = travel;
 	}
 
 	public Type getType()
