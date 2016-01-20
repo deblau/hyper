@@ -19,7 +19,10 @@ class INNState
 	ArrayList<CubeAddress> unwilling = new ArrayList<>();
 
 	// Phase 1 state of the INN, used for protocol state validation
-	CubeMessage.Type state = CubeMessage.Type.CONN_EXT_INN_REQ;
+	CubeMessage.Type state = CubeMessage.Type.CONN_INN_REQ_ANN;
+	
+	// Phase 1 hop count of the INN
+	int hops = 1;
 
 	INNState(SocketChannel chan) {
 		this.chan = chan;

@@ -1,7 +1,6 @@
 package hyper;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Vector;
 
 /**
  * State variables associated with my connection to the Cube.
@@ -12,11 +11,12 @@ class CubeState
 	int dim = 0;
 
 	// My CubeAddress
-	CubeAddress addr = CubeAddress.NODE_ZERO;
+	CubeAddress addr = CubeAddress.ZERO;
 
 	// My connected neighbor nodes
-	ArrayList<Neighbor> neighbors = new ArrayList<>();
+	Vector<Neighbor> neighbors = new Vector<>();
 
-	// Next-hop routing information
-	HashMap<CubeAddress, Neighbor> routeCache = new HashMap<>();
+	// Bitmap of which nodes are connected; this is used by the broadcast algorithm, and must be a new Object since
+	// BigInteger.ZERO is final
+	CubeAddress links = new CubeAddress("0");
 }

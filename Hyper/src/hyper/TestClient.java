@@ -13,7 +13,6 @@ public class TestClient
 	{
 		listener = new MessageListener(new InetSocketAddress(port), false);
 		listener.start();
-		Thread.sleep(1000);
 		protocol = new CubeProtocol();
 		listener.setProtocol(protocol);
 		protocol.setListener(listener);
@@ -34,17 +33,19 @@ public class TestClient
 	{
 		int node0port = 20000;
 		
-		// Set up initial node
+		// Set up initial node, will get CubeAddress 0
 		new TestClient(node0port);
 
-		// First client
+		// First client, will get CubeAddress 1
 		TestClient client1 = new TestClient(node0port+1000);
 		client1.request_join(node0port);
-		Thread.sleep(1000);
-		client1.send_data(CubeAddress.NODE_ZERO, "test data");
 
+		// Second client, will get CubeAddress 2 OR 3, depending on a coin flip
 		TestClient client2 = new TestClient(node0port+2000);
 		client2.request_join(node0port);
-		client2.send_data(new CubeAddress("1"), "I got you some data");
+		
+		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper 
+		client2.send_data(new CubeAddress("0"), "Data for Node 0");
+		client2.send_data(new CubeAddress("1"), "Data for Node 1");
 	}
 }

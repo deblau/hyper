@@ -217,13 +217,14 @@ public class MessageListener extends Thread
 					{
 						// Perform the read
 						CubeMessage msg = CubeMessage.recv(chan);
+						if (null != msg)
+						{
+							// Schedule it for re-registration
+							reregister.add(chan);
 
-						// Schedule it for re-registration
-						reregister.add(chan);
-
-						// Now (finally!) we can process the message
-						protocol.process(msg);
-
+							// Now (finally!) we can process the message
+							protocol.process(msg);
+						}
 					} catch (Exception e)
 					{
 						e.printStackTrace();

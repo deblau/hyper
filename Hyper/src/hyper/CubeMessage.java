@@ -1,6 +1,7 @@
 package hyper;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
@@ -15,10 +16,9 @@ class CubeMessage implements Serializable
 	 */
 	private static final long serialVersionUID = -2640817563881316595L;
 
-	static ByteBuffer buf = ByteBuffer.allocate(2048);
-
 	// Message types
 	public enum Type {
+
 		// Invalid message
 		INVALID_MSG,
 
@@ -27,6 +27,12 @@ class CubeMessage implements Serializable
 		// Dest: varies
 		// Data: [current state, attempted transition state]
 		INVALID_STATE,
+
+		// Invalid data
+		// Src: varies
+		// Dest: varies
+		// Data: varies
+		INVALID_DATA,
 
 		// Message (outside the Cube) from external client to ingress negotiation node (INN), requesting a CubeAddress
 		// Src: NO_ADDRESS
@@ -38,7 +44,7 @@ class CubeMessage implements Serializable
 		// Src: INN
 		// Dest: Connected node
 		// Data: InetSocketAddress of client's MessageListener
-		CONN_INN_BCAST,
+		CONN_INN_REQ_ANN,
 
 		// Message from Cube node to INN, declaring ability and willingness to accept connection
 		// Src: Connected node
@@ -220,13 +226,13 @@ class CubeMessage implements Serializable
 	};
 
 	// Source Cube address
-	private CubeAddress src = CubeAddress.NO_ADDRESS;
+	private CubeAddress src = CubeAddress.INVALID_ADDRESS;
 
 	// Destination Cube address
-	private CubeAddress dst = CubeAddress.NO_ADDRESS;
+	private CubeAddress dst = CubeAddress.INVALID_ADDRESS;
 
 	// Path information used for route requests and broadcasts; see Katseff
-	private int travel = 0;
+	private BigInteger travel;
 
 	// Type of message
 	private Type type = Type.INVALID_MSG;
@@ -305,14 +311,30 @@ class CubeMessage implements Serializable
 		return dst;
 	}
 
-	public int getTravel()
+	// Called by CubeProtocol to implement Phase 1 using custom hop count
+	void setDst(CubeAddress dst)
+	{
+		this.dst = dst;
+	}
+
+	// Called by CubeProtocol to implement broadcast
+	BigInteger getTravel()
 	{
 		return travel;
 	}
 
-	public void setTravel(int travel)
+	// Called by CubeProtocol to implement broadcast
+	void setTravel(BigInteger travel)
 	{
 		this.travel = travel;
+	}
+
+	// Called by CubeProtocol to implement broadcast
+	void reduceHops()
+	{
+		// dst is null when a user calls broadcast(); it's not null when we're being tricky under the hood
+		if (null != dst)
+			dst = (CubeAddress) dst.add(BigInteger.ONE);
 	}
 
 	public Type getType()
@@ -325,7 +347,7 @@ class CubeMessage implements Serializable
 		return data;
 	}
 
-	public SocketChannel getChannel()
+	SocketChannel getChannel()
 	{
 		return channel;
 	}
