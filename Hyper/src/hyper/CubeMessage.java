@@ -19,22 +19,45 @@ class CubeMessage implements Serializable
 	// Message types
 	public enum Type {
 
-		// Invalid message
-		INVALID_MSG,
-
-		// Invalid state
+		// Invalid message format
 		// Src: varies
 		// Dest: varies
-		// Data: [current state, attempted transition state]
-		INVALID_STATE,
+		// Data: message type
+		INVALID_MSG,
 
-		// Invalid data
+		// Invalid message data
 		// Src: varies
 		// Dest: varies
 		// Data: varies
 		INVALID_DATA,
 
-		// Message (outside the Cube) from external client to ingress negotiation node (INN), requesting a CubeAddress
+		// Invalid protocol state
+		// Src: varies
+		// Dest: varies
+		// Data: [current state, attempted transition state]
+		INVALID_STATE,
+
+		// Invalid Cube address
+		// Src: varies
+		// Dst: the node that determined the invalidity
+		// Data: the invalid address
+		INVALID_ADDRESS,
+
+		/**
+		 * Messages exchanged during multiple phases
+		 */
+
+		// Message (outside the Cube) from ingress negotiation node (INN) to client, rejecting a connection
+		// Src: NO_ADDRESS
+		// Dest: NO_ADDRESS
+		// Data: null (could be extended to include a reason)
+		CONN_INN_EXT_CONN_REFUSED,
+
+		/**
+		 * Messages exchanged during Phase 1
+		 */
+
+		// Message (outside the Cube) from external client to INN, requesting a CubeAddress
 		// Src: NO_ADDRESS
 		// Dest: NO_ADDRESS
 		// Data: InetSocketAddress of client's MessageListener
@@ -42,7 +65,7 @@ class CubeMessage implements Serializable
 
 		// Message from INN to other Cube nodes, asking recipients for ability and willingness to accept connection
 		// Src: INN
-		// Dest: Connected node
+		// Dest: Broadcast
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_INN_REQ_ANN,
 
@@ -70,35 +93,9 @@ class CubeMessage implements Serializable
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_INN_ANN_HANDOFF,
 
-		// Message from ANN to INN, declaring successful address negotiation
-		// Src: (New) ANN
-		// Dest: INN
-		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_INN_SUCC,
-
-		// Message from ANN to INN, declaring unsuccessful address negotiation due to inability
-		// Src: ANN
-		// Dest: INN
-		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_INN_UNABLE,
-
-		// Message from ANN to INN, declaring unsuccessful address negotiation due to unwillingness
-		// Src: ANN
-		// Dest: INN
-		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_INN_UNWILLING,
-
-		// Message from INN to ANN, instructing attachment using a higher Cube dimension
-		// Src: INN
-		// Dest: ANN
-		// Data: InetSocketAddress of client's MessageListener
-		CONN_INN_ANN_EXPAND,
-
-		// Message (outside the Cube) from INN to client, rejecting the connection
-		// Src: NO_ADDRESS
-		// Dest: NO_ADDRESS
-		// Data: null (could be extended to include a reason)
-		CONN_INN_EXT_CONN_REFUSED,
+		/**
+		 * Messages exchanged during Phase 2
+		 */
 
 		// Message from ANN to new neighbor, asking for willingness to accept connection
 		// Src: ANN
@@ -117,6 +114,22 @@ class CubeMessage implements Serializable
 		// Dest: ANN
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_NEI_ANN_NAK,
+
+		// Message from ANN to INN, declaring unsuccessful address negotiation due to inability
+		// Src: ANN
+		// Dest: INN
+		// Data: InetSocketAddress of client's MessageListener
+		CONN_ANN_INN_UNABLE,
+
+		// Message from ANN to INN, declaring unsuccessful address negotiation due to unwillingness
+		// Src: ANN
+		// Dest: INN
+		// Data: InetSocketAddress of client's MessageListener
+		CONN_ANN_INN_UNWILLING,
+
+		/**
+		 * Messages exchanged during Phase 3: Neighbors attempt connection to peer prior to revealing CubeAddress
+		 */
 
 		// Message (outside the Cube) from ANN to external client, offering it a new CubeAddress
 		// Src: NO_ADDRESS
@@ -203,22 +216,20 @@ class CubeMessage implements Serializable
 		CONN_ANN_EXT_CONN_SUCC,
 
 		// Message (outside the Cube) from ANN to client, denying the connection and shutting down the link
-		// Src: INN
+		// Src: ANN
 		// Dest: client's CubeAddress
-		// Data: dimension of the cube
+		// Data: none
 		CONN_ANN_EXT_CONN_FAIL,
 
-		// Message requesting a route to a destination
-		// Data: none (destination is stored in msg.dst)
-		ROUTE_REQ,
+		// Message from ANN to INN, declaring successful address negotiation
+		// Src: (New) ANN
+		// Dest: INN
+		// Data: InetSocketAddress of client's MessageListener
+		CONN_ANN_INN_SUCC,
 
-		// Message stating the that destination is reachable
-		// Data: destination
-		ROUTE_RESP_RCHBL,
-
-		// Message stating that the destination is unreachable
-		// Data: destination
-		ROUTE_RESP_UNRCH,
+		/*
+		 * Other messages
+		 */
 
 		// Message between Cube nodes, containing useful data
 		// Data: arbitrary
@@ -238,7 +249,7 @@ class CubeMessage implements Serializable
 	private Type type = Type.INVALID_MSG;
 
 	// Payload data
-	private Object data = null;
+	private Serializable data = null;
 
 	// The SocketChannel this Message came from, if any
 	private SocketChannel channel = null;
@@ -252,11 +263,23 @@ class CubeMessage implements Serializable
 	/*
 	 * For sending regular messages when the source and destination already have Cube addresses
 	 */
-	public CubeMessage(CubeAddress src, CubeAddress dst, Type type, Object data) {
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data) throws IOException {
+		if (dst != null && BigInteger.ZERO.compareTo(dst) > 0)
+			throw new IOException("Wrong constructor CubeMessage() called for broadcast address");
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
 		this.data = data;
+	}
+
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim) throws IOException {
+		if (dst != null && BigInteger.ZERO.compareTo(dst) <= 0)
+			throw new IOException("Wrong constructor CubeMessage() called for non-broadcast address");
+		this.src = src;
+		this.dst = dst;
+		this.type = type;
+		this.data = data;
+		this.travel = BigInteger.ZERO.setBit(dim).subtract(BigInteger.ONE);
 	}
 
 	/**
@@ -268,9 +291,15 @@ class CubeMessage implements Serializable
 	 */
 	void send(SocketChannel chan) throws IOException
 	{
-		// This is a non-blocking send; the receive on the other end is still blocking
+		/*
+		 * This is a non-blocking send; the receive on the other end is still blocking. Note that the channel is not
+		 * serializeable, so we have to save it temporarily.
+		 */
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		SocketChannel saved = channel;
+		channel = null;
 		new ObjectOutputStream(baos).writeObject(this);
+		channel = saved;
 		ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
 		chan.write(buf);
 	}
@@ -342,7 +371,7 @@ class CubeMessage implements Serializable
 		return type;
 	}
 
-	public Object getData()
+	public Serializable getData()
 	{
 		return data;
 	}

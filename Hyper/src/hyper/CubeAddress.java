@@ -18,6 +18,9 @@ public class CubeAddress extends BigInteger
 		super(arg0);
 	}
 
+	/**
+	 * Returns the link by which the other CubeAddress can be reached, or -1 if the other CubeAddress is not a neighbor
+	 */
 	public int relativeLink(CubeAddress other)
 	{
 		BigInteger xor = xor(other);

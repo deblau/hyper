@@ -23,18 +23,18 @@ public class TestClient
 		protocol.connect(new InetSocketAddress(port), (InetSocketAddress) listener.getAddress());
 	}
 
-	private void send_data(CubeAddress addr, String data) throws IOException
+	private void send_data(CubeAddress addr, String data) throws Exception
 	{
 		CubeState state = protocol.getCubeState();
 		protocol.send(new CubeMessage(state.addr, addr, CubeMessage.Type.DATA_MSG, data));
 	}
 
-	public static void main(String[] args) throws IOException, InterruptedException
+	public static void main(String[] args) throws Exception
 	{
 		int node0port = 20000;
 		
 		// Set up initial node, will get CubeAddress 0
-		new TestClient(node0port);
+		TestClient client0 = new TestClient(node0port);
 
 		// First client, will get CubeAddress 1
 		TestClient client1 = new TestClient(node0port+1000);
@@ -47,5 +47,23 @@ public class TestClient
 		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper 
 		client2.send_data(new CubeAddress("0"), "Data for Node 0");
 		client2.send_data(new CubeAddress("1"), "Data for Node 1");
-	}
+		Message msg = client1.protocol.recv();
+		System.err.println("Node 1 got \"" + msg.data + "\" from Node " + msg.peer);
+		
+		// Third client, will get CubeAddress 3 OR 2, whichever is available
+		TestClient client3 = new TestClient(node0port+3000);
+		client3.request_join(node0port);
+		
+		// Test message passing in both directions.
+		client3.send_data(new CubeAddress("0"), "Data for Node 0");
+		client3.send_data(new CubeAddress("1"), "Data for Node 1");
+		client3.send_data(new CubeAddress("2"), "Data for Node 2");
+		
+		// Test broadcast
+
+
+		// Fake a failure of client #2
+		client2.listener.shutdown();
+		
+}
 }

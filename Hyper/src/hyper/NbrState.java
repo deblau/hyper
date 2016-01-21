@@ -17,14 +17,15 @@ class NbrState
 	SocketChannel chan;
 
 	// Nonce to use when connecting
-	Double nonce = Math.random();
+	Integer nonce;
 
 	// Phase 3 state of the neighbor, used for protocol state validation
-	CubeMessage.Type state = CubeMessage.Type.CONN_ANN_NEI_SUCC;
+	CubeMessage.Type state = null;
 
-	public NbrState(CubeAddress ann, SocketAddress addr) throws IOException
+	public NbrState(CubeAddress ann, SocketAddress addr, Integer nonce) throws IOException
 	{
 		this.ann = ann;
 		chan = SocketChannel.open(addr);
+		this.nonce = nonce;
 	}
 }

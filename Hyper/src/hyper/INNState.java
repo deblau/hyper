@@ -11,6 +11,9 @@ class INNState
 {
 	// Socket channel for connecting node
 	SocketChannel chan;
+	
+	// List of able and willing nodes
+	ArrayList<CubeAddress> acked = new ArrayList<>();
 
 	// List of unable nodes
 	ArrayList<CubeAddress> unable = new ArrayList<>();
@@ -19,7 +22,7 @@ class INNState
 	ArrayList<CubeAddress> unwilling = new ArrayList<>();
 
 	// Phase 1 state of the INN, used for protocol state validation
-	CubeMessage.Type state = CubeMessage.Type.CONN_INN_REQ_ANN;
+	CubeMessage.Type state = null;
 	
 	// Phase 1 hop count of the INN
 	int hops = 1;
