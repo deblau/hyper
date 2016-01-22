@@ -1,6 +1,7 @@
 package hyper;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.SocketChannel;
 
@@ -13,8 +14,11 @@ class NbrState
 	// Coordinating ANN
 	CubeAddress ann;
 
+	// Address of client
+	SocketAddress addr;
+
 	// Socket to the connecting node
-	SocketChannel chan;
+	SocketChannel chan = null;
 
 	// Nonce to use when connecting
 	Integer nonce;
@@ -25,7 +29,7 @@ class NbrState
 	public NbrState(CubeAddress ann, SocketAddress addr, Integer nonce) throws IOException
 	{
 		this.ann = ann;
-		chan = SocketChannel.open(addr);
+		this.addr = addr;
 		this.nonce = nonce;
 	}
 }

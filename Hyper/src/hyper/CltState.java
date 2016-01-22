@@ -22,5 +22,5 @@ class CltState
 	public ArrayList<Integer> nonces;
 
 	// Connection state
-	CubeMessage.Type state = CubeMessage.Type.CONN_EXT_INN_REQ;
+	CubeMessage.Type state = CubeMessage.Type.CONN_EXT_INN_ATTACH;
 }

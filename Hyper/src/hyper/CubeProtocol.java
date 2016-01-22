@@ -60,116 +60,170 @@ import java.util.HashMap;
  * There is one major function provided by the protocol that requires many different types of messages to be passed:
  * connecting new clients to the Cube. The chief concern in this area of the protocol is maintaining the anonymity of
  * the link between an {@link InetAddress} and a {@link CubeAddress}. Obviously, each Cube must provide one or more
- * ingress negotiation nodes (INNs) that act as gateways for the new CubeAddress discovery process, and the
- * <code>InetAddress</code> of each of these INNs must be discoverable outside the protocol. The discovery process for
- * INNs is outside the scope of this protocol; Cube communities may develop their own standards. However, the protocol
- * nevertheless shields the revelation of any <code>CubeAddress</code> to a connecting client until the last possible
- * moment, after it has been approved to join the Cube.
+ * Ingress Negotiation Nodes (INNs) that act as gateways for the connection process, and the <code>InetAddress</code> of
+ * each of these INNs must be discoverable outside the protocol. The discovery process for INNs is outside the scope of
+ * this protocol; Cube communities may develop their own standards. However, the protocol nevertheless shields the
+ * revelation of any <code>CubeAddress</code> to a connecting client until the last possible moment, after it has been
+ * approved to join the Cube.
  * </p>
  * 
  * <p>
- * The connection process operates in four phases.
+ * The connection process operates in five phases. In the first phase, the INN locates an attachment point for an
+ * external client that wishes to join. This attachment node takes over the remainder of the process as an Address
+ * Negotiation Node (ANN). In the second phase, the ANN confirms that attachment is acceptable to all of the would-be
+ * new neighbors. In the third phase, the ANN offers the external client a CubeAddress using a direct connection (i.e.,
+ * outside the normal Cube message passing algorithm), without revealing its own address or that of any of the would-be
+ * neighbors. In the fourth phase, the ANN instructs the neighbors to connect to the client (again, without revealing
+ * any of their Cube addresses) and verify that all (TCP/IP) connections are solid. In the fifth phase, the ANN
+ * instructs the neighbor nodes to reveal their addresses to the client via direct connection, completing the Cube
+ * connection. If any of Phases 2 through 5 fail, the ANN informs the INN, which resumes the search for a working ANN.
+ * If no ANN can be found, the INN informs the client that the connection was denied.
  * </p>
  * 
- * <h4>Phase 1</h4>
+ * <p>
+ * The details of these processes follow. Message types referenced below are found in the {@link CubeMessage.Type} inner
+ * class. Messages for protocol connections are named in four parts. The first part is <code>CONN</code>, signifying
+ * their purpose. The second and third parts indicate the role of the clients respectively sending and receiving the
+ * message: <code>EXT</code> for the external client, <code>INN</code> for the Ingress Negotiation Node,
+ * <code>GEN</code> for a generic Cube node, <code>ANN</code> for the Address Negotiation Node, and <code>NBR</code> for
+ * a potential neighbor node. The fourth part is the purpose of the message.
+ * </p>
+ * 
+ * <h4>Phase 1: Locating possible attachment point</h4>
  * <p>
  * The first phase has the goal of locating an attachment point for a new node, and is executed by the INN in response
- * to receiving a request from an external client to join the Cube. The INN relays, to other nodes in the Cube, the
- * request with the client's information, asking for any nodes that are both able to accept the connection (because they
- * have a vacancy in their connectivity table) and are willing to accept the connection (based on client information,
- * currently an {@link InetSocketAddress} of the client). This is done by sending broadcast {@link CubeMessage}s having
- * successively increasing hop counts, until at least one other node accepts the request. The INN designates this node
- * as the address negotiating node (ANN), and hands off the remainder of the process to the ANN. Because address
- * negotiation can fail, the ANN is required to reply with a success-or-fail status to the INN. If the negotiation
- * succeeds, the INN can terminate its participation in the addressing protocol, while if the negotiation fails, the INN
- * continues searching.
+ * to receiving a <code>CONN_EXT_INN_ATTACH</code> message from an external client. The INN broadcasts, to other nodes
+ * in the Cube, a <code>CONN_INN_GEN_ANN</code> request with the client's information, asking for any nodes that are
+ * both able to accept the connection (because they have a vacancy in their connectivity table) and are willing to
+ * accept the connection (based on client information, currently an {@link InetSocketAddress} of the client). This is
+ * done by sending broadcast messages having successively increasing hop counts, until at least one other node accepts
+ * the request. The INN designates this node as the address negotiating node (ANN), and hands off the remainder of the
+ * process to the ANN using a <code>CONN_INN_ANN_HANDOFF</code> message (while cachine other possible attachment points
+ * at the given hop count). Because address negotiation can fail, the ANN must reply with a success-or-fail status to
+ * the INN. If the negotiation of Phases 2 through 5 succeeds as indicated by a <code>CONN_ANN_INN_SUCCESS</code>
+ * message, the INN can terminate its participation in the addressing protocol. However if the negotiation fails (see
+ * discussion below), the INN continues searching using the ANN cache.
  * </p>
  * 
  * <p>
- * The INN itself will fail if there are no {@link CubeAddress}es whose neighbors are all willing and able to connect to
- * the new client. Willingness to connect is a potentially serious issue; for example, a node may wish to maintain a
- * blacklist of IP address blocks that are denied connections due to political or network routing efficiency concerns.
- * Therefore, the protocol guarantees that no Cube member shall be required to connect to any client for which it
- * signals an unwillingness to do so. This guarantee is implemented by having each ANN declare to the INN a failure to
- * connect the new client due to unwillingness of any of its potential neighbor nodes.
+ * An ANN may only connect the client if the client's prospective neighbors are all willing and able to connect to the
+ * new client. Willingness to connect is a potentially serious issue; for example, a node may wish to maintain a
+ * blacklist of IP addresses or blocks that are denied connections due to political or network routing efficiency
+ * concerns. Therefore, the protocol guarantees that no Cube member shall be required to connect to any client for which
+ * it signals an unwillingness to do so. This guarantee is implemented by having each ANN declare to the INN a failure
+ * to connect the new client due to unwillingness of any of its potential neighbor nodes by sending a
+ * <code>CONN_ANN_INN_UNWILLING</code> message if its {@link #amWilling(InetSocketAddress)} function returns
+ * <code>false</code>.
  * </p>
  * 
  * <p>
- * However, ability to connect (that is, whether there are any open links given the dimension of the Cube) is an issue
- * of address space size, which is easily fixed within the protocol. Therefore, an INN that cannot place the new client
- * in the Cube's existing address space will increase the dimension of the Cube. This is done by instructing a (randomly
- * selected) ANN, that indicated only an inability to attach the new client, to attach it anyway using a higher Cube
- * dimension.
+ * However, ability to connect (that is, whether a node has a slot for connecting to another node) is an issue of Cube
+ * topology, which is easily fixed within the protocol. An INN determines whether it can place a new client in the
+ * Cube's address space by calling {@link #check_expand(InetSocketAddress)}. If the various heuristics used indicate
+ * that expansion is warranted, this function instructs a randomly selected ANN, that indicated only an inability to
+ * attach the new client via a <code>CONN_ANN_INN_UNABLE</code> message, to attach it anyway using a higher Cube
+ * dimension. The protocol allows the INN to select itself as the attachment node (after passing its own willingness
+ * check).
  * </p>
  * 
  * <p>
- * <b>Security analysis</b>: During Phase 1, the new peer's {@link InetSocketAddress} is passed around, but its
+ * <b>Address security analysis</b>: During Phase 1, the new peer's {@link InetSocketAddress} is passed around, but its
  * {@link CubeAddress} has not been determined. Listening for nodes that accept responsibility as ANN does not reveal a
- * relationship, since it is not known whether the remaining Phases will be successful, and in any event the accepting
- * ANN might attach the new peer on any of a number of different <code>CubeAddress</code>es.
+ * confidential address relationship, since it is not known whether the remaining Phases will be successful, and in any
+ * event the accepting ANN might attach the new peer on any of a number of different <code>CubeAddress</code>es, with
+ * the uncertainty growing as the Cube's dimension increases.
  * </p>
  * 
- * <h4>Phase 2</h4>
+ * <h4>Phase 2: Confirming the attachment point</h4>
  * <p>
  * The second phase of the connection protocol is carried out by the ANN to find an acceptable {@link CubeAddress} for
  * the new node. The ANN first selects a vacant, neighbor <code>CubeAddress</code> as the possible address of the new
  * client. (Such an address exists, since either the ANN indicated ability to connect or the dimension of the Cube is
- * increasing.) The ANN then sends client connection requests to each neighbor of the possible address, asking only for
- * willingness to connect. (With a little thought, it can be seen that each such neighbor already is able to connect the
- * new address.) During this process, each willing neighbor transmits a random nonce to the ANN, used in the third phase
- * for authentication. If any prospective neighbor signals its unwillingness, the ANN chooses another potential
- * <code>CubeAddress</code> for the peer, and tries again. If all such addresses have at least one unwilling neighbor,
- * the ANN relays that information to the INN and the second phase terminates unsuccessfully for the ANN. (Thus, a
- * node's attitude toward connecting a given {@link InetSocketAddress} can go from merely unable, to unwilling,
- * depending on its two-hop neighbors.) In response to such an event, the INN resumes Phase 1 processing until it finds
- * a new ANN.
+ * increasing.) The ANN then sends <code>CONN_ANN_NBR_REQ</code> messages to each neighbor of the possible address,
+ * asking only for willingness to connect. (With a little multi-dimensional thought, it can be seen that each such
+ * neighbor already is able to connect the new address.) During this process, each willing neighbor transmits a random
+ * nonce to the ANN via <code>CONN_NBR_ANN_ACK</code>, used in Phase 4 for authentication. If any prospective neighbor
+ * signals its unwillingness via <code>CONN_NBR_ANN_NAK</code>, the ANN chooses another <code>CubeAddress</code> for the
+ * peer, and tries again. If all such addresses have at least one unwilling neighbor, the ANN relays that information to
+ * the INN via <code>CONN_ANN_INN_FAIL</code> and Phase 2 terminates unsuccessfully for the ANN.
  * </p>
  * 
  * <p>
- * <b>Security analysis</b>: The ANN knows the {@link InetSocketAddress} of the peer, and selects its potential new
- * {@link CubeAddress}, however this is not a security threat because the ANN will be a neighbor to the peer, and
+ * <b>Address security analysis</b>: The ANN knows the {@link InetSocketAddress} of the peer, and selects its potential
+ * new {@link CubeAddress}, however this is not a security threat because the ANN will be a neighbor to the peer, and
  * therefore must know this relationship anyway. The same can be said for each prospective new neighbor.
  * </p>
  * 
  * <p>
  * The relaying node between the ANN and each prospective new neighbor can determine the relationship based on traffic
- * analysis, provided all messages between the pairs pass through it. The number of such relay nodes that might pose a
- * security leak is <em>n</em>(<em>n</em>-1)/2=O(<em>n</em><sup>2</sup>), where <em>n</em> is the dimension of the Cube.
- * However, the number of nodes in the Cube grows as O(2<sup><em>n</em></sup>), which is exponentially faster.
- * Therefore, relative security <b>increases</b> as the Cube grows larger. [N.B. The protocol should probably be fixed
- * to require nodes to publish an encryption mechanism to encrypt traffic during this phase.]
+ * analysis, provided all messages between the pairs pass through it. To prevent this, <code>CONN_ANN_NBR_REQ</code>
+ * messages are sent along a non-shortest-path route; <code>CONN_NBR_ANN_ACK</code> and <code>CONN_NBR_ANN_ACK</code>
+ * replies follow the shortest-path route, thereby foiling this attack.
  * </p>
  * 
- * <h4>Phase 3</h4>
+ * <h4>Phase 3: Offering a CubeAddress to the client</h4>
  * <p>
- * The third phase of the connection protocol asks each potential new neighbor to actually establish a connection to the
- * new peer, prior to revealing its {@link CubeAddress}. This phase begins once an ANN finds a collection of nodes that
- * are willing (and able) to connect to the client. The ANN notifyies the new client of the client's new
- * <code>CubeAddress</code> and the list of nonces from its new neighbors. This is done without revealing the ANN's
- * <code>CubeAddress</code>, because the client cannot yet be trusted with that information. It is also done without
- * revealing an association between each nonce and a corresponding Cube node. Once the client acknowledges the address
- * and the nonces, the ANN communicates this fact to each of the new neighbors, who contact the client with empty
- * messages. In response, the new client must reply with both its new <code>CubeAddress</code> and the set of nonces.
- * Each neighbor verifies that (1) the new <code>CubeAddress</code> is a valid neighbor, and (2) that the list of nonces
- * contains the nonce generated by the neighbor and has length equal to the current dimension of the Cube. The neighbor
- * reports success or failure of the verification to the ANN.
+ * The ANN notifies the new client of the client's new <code>CubeAddress</code> and the list of nonces from its new
+ * neighbors via <code>CONN_ANN_EXT_OFFER</code>. This is done without revealing the ANN's <code>CubeAddress</code>,
+ * because the client cannot yet be trusted with that information. It is also done without revealing an association
+ * between each nonce and a corresponding Cube node.
  * </p>
  * 
  * <p>
- * <b>Security analysis</b>: Phase 3 communications within the Cube do not contain the {@link CubeAddress} of the
- * client, and communications outside the Cube do not contain the {@link CubeAddress} of any Cube node.
- * </p>
- * 
- * <h4>Phase 4</h4>
- * <p>
- * Once the ANN concludes that all verifications were successful, the final phase begins, in which each of the new
- * neighbors provides the client with its {@link CubeAddress}. The ANN goes first, then instructs the neighbors that it
- * is safe for them to provide their addresses as well.
- * </p>
+ * The client may express its own unwillingness to connect to the ANN via <code>CONN_EXT_ANN_NAK</code>. In this case,
+ * the ANN communicates the address negotiation failure to the neighbors (via <code>CONN_ANN_NBR_FAIL</code>) and the
+ * INN (via <code>CONN_ANN_INN_FAIL</code>). Otherwise, the client acknowledges the address and the nonces using a
+ * <code>CONN_EXT_ANN_ACK</code> message. If so, the ANN communicates this fact to each of the new neighbors via
+ * <code>CONN_ANN_NBR_SUCCESS</code>, and proceeds to Phase 4.
  * 
  * <p>
- * <b>Security analysis</b>: All Phase 4 communications are done outside of the Cube; therefore, no other Cube nodes
- * have access to the relationship between {@link CubeAddress} and {@link InetSocketAddress}.
+ * <b>Address security analysis</b>: Phase 3 communications within the Cube do not contain the {@link CubeAddress} of
+ * the client, and communications outside the Cube do not contain the {@link CubeAddress} of any Cube node.
+ * </p>
+ * 
+ * <h4>Phase 4: Neighbors all connect without revealing their CubeAddresses</h4>
+ * <p>
+ * Each neighbor sends to the client, by direct connection outside the node, a <code>CONN_NBR_EXT_OFFER</code> message
+ * containing no data. In response, the new client must reply with a <code>CONN_EXT_NBR_ACK</code> message containing
+ * both its new <code>CubeAddress</code> and the entire set of nonces. (It can, of course, be unwilling to connect, and
+ * send a <code>CONN_EXT_NBR_NAK</code>.) Each neighbor verifies that (1) the new <code>CubeAddress</code> is a valid
+ * neighbor, and (2) the list of nonces has length equal to the current dimension of the Cube and contains the nonce
+ * generated by the neighbor itself. The neighbor reports success or failure of the verification to the ANN via
+ * <code>CONN_NBR_ANN_SUCCESS</code> and <code>CONN_NBR_ANN_FAIL</code> messages.
+ * </p>
+ * 
+ * <p>
+ * If the ANN gets even a single failure, it shuts down the negotiation by sending a <code>CONN_ANN_NBR_NADV</code>
+ * message, informing each of them not to advertise its <code>CubeAddress</code> to the client. The ANN then informs the
+ * INN of the failure. However, if all neighbors report success, the connection is assured and the protocol proceeds to
+ * the final phase.
+ * </p>
+ * 
+ * <p>
+ * <b>Address security analysis</b>: Phase 4 communications within the Cube do not contain the {@link CubeAddress} of
+ * the client, and communications outside the Cube do not contain the {@link CubeAddress} of any Cube node.
+ * </p>
+ * 
+ * <h4>Phase 5: CubeAddress advertisement</h4>
+ * <p>
+ * Once the ANN concludes that all neighbor connections were successful, each of the new neighbors provides the client
+ * with its {@link CubeAddress} via <code>CONN_NBR_EXT_ACK</code>. The ANN goes first, then instructs the neighbors that
+ * it is safe for them to provide their addresses as well, all via <code>CONN_ANN_NBR_ADV</code> messages. The ANN also
+ * transmits <code>CONN_ANN_INN_SUCCESS</code> to the INN, to permit the INN to clean up its own ingress state.
+ * </p>
+ * 
+ * <p>
+ * <b>Address security analysis</b>: Phase 5 communications within the Cube do not contain the {@link CubeAddress} of
+ * the client, and communications outside the Cube do not contain the {@link CubeAddress} of any Cube node.
+ * </p>
+ * 
+ * <h3>Classes used in the protocol</h3>
+ * <p>
+ * Because the messages themselves are stateless, each node must keep track of state pertaining to each of its roles.
+ * During the connection process, some nodes may have several roles simultaneously; for example, when the Cube is first
+ * starting, Node 0 is an INN, ANN, and NBR for the first new client, all at the same time. State-keeping classes are
+ * package-private, and named for the particular state being kept. For example, the {@link INNState} class keeps track
+ * of the INN state, and so on.
  * </p>
  */
 public class CubeProtocol
@@ -218,36 +272,31 @@ public class CubeProtocol
 				send(msg);
 		}
 
-		switch (msg.getType()) {
-		case CONN_ANN_EXT_CONN_SUCC:
-			conn_ann_ext_conn_succ(msg);
-			break;
+		switch (msg.getType())
+		{
 		case CONN_ANN_EXT_OFFER:
 			conn_ann_ext_offer(msg);
 			break;
-		case CONN_ANN_INN_SUCC:
+		case CONN_ANN_INN_SUCCESS:
 			conn_ann_inn_succ(msg);
 			break;
-		case CONN_ANN_INN_UNABLE:
-			conn_ann_inn_unable(msg);
-			break;
-		case CONN_ANN_INN_UNWILLING:
+		case CONN_ANN_INN_FAIL:
 			conn_ann_inn_unwilling(msg);
 			break;
-		case CONN_ANN_NEI_ADV:
-			conn_ann_nei_adv(msg);
+		case CONN_ANN_NBR_ADV:
+			conn_ann_nbr_adv(msg);
 			break;
-		case CONN_ANN_NEI_FAIL:
-			conn_ann_nei_fail(msg);
+		case CONN_ANN_NBR_FAIL:
+			conn_ann_nbr_fail(msg);
 			break;
-		case CONN_ANN_NEI_NADV:
-			conn_ann_nei_nadv(msg);
+		case CONN_ANN_NBR_NADV:
+			conn_ann_nbr_nadv(msg);
 			break;
-		case CONN_ANN_NEI_REQ:
-			conn_ann_nei_req(msg);
+		case CONN_ANN_NBR_REQ:
+			conn_ann_nbr_req(msg);
 			break;
-		case CONN_ANN_NEI_SUCC:
-			conn_ann_nei_succ(msg);
+		case CONN_ANN_NBR_SUCCESS:
+			conn_ann_nbr_succ(msg);
 			break;
 		case CONN_EXT_ANN_ACK:
 			conn_ext_ann_ack(msg);
@@ -255,11 +304,11 @@ public class CubeProtocol
 		case CONN_EXT_ANN_NAK:
 			conn_ext_ann_nak(msg);
 			break;
-		case CONN_EXT_INN_REQ:
+		case CONN_EXT_INN_ATTACH:
 			conn_ext_inn_req(msg);
 			break;
-		case CONN_EXT_NEI_ACK:
-			conn_ext_nei_ack(msg);
+		case CONN_EXT_NBR_ACK:
+			conn_ext_nbr_ack(msg);
 			break;
 		case CONN_INN_ANN_HANDOFF:
 			conn_inn_ann_handoff(msg);
@@ -267,46 +316,47 @@ public class CubeProtocol
 		case CONN_INN_EXT_CONN_REFUSED:
 			conn_inn_ext_conn_refused(msg);
 			break;
-		case CONN_INN_REQ_ANN:
+		case CONN_INN_GEN_ANN:
 			// Broadcast message
-			conn_inn_req_ann(msg);
+			conn_inn_gen_ann(msg);
 			break;
-		case CONN_NEI_ANN_ACK:
-			conn_nei_ann_ack(msg);
+		case CONN_NBR_ANN_ACK:
+			conn_nbr_ann_ack(msg);
 			break;
-		case CONN_NEI_ANN_FAIL:
-			conn_nei_ann_fail(msg);
+		case CONN_NBR_ANN_FAIL:
+			conn_nbr_ann_fail(msg);
 			break;
-		case CONN_NEI_ANN_NAK:
-			conn_nei_ann_nak(msg);
+		case CONN_NBR_ANN_NAK:
+			conn_nbr_ann_nak(msg);
 			break;
-		case CONN_NEI_ANN_SUCC:
-			conn_nei_ann_succ(msg);
+		case CONN_NBR_ANN_SUCC:
+			conn_nbr_ann_succ(msg);
 			break;
-		case CONN_NEI_EXT_ACK:
-			conn_nei_ext_ack(msg);
+		case CONN_NBR_EXT_ACK:
+			conn_nbr_ext_ack(msg);
 			break;
-		case CONN_NEI_EXT_OFFER:
-			conn_nei_ext_offer(msg);
+		case CONN_NBR_EXT_OFFER:
+			conn_nbr_ext_offer(msg);
 			break;
-		case CONN_NODE_INN_ACK:
-			conn_node_inn_ack(msg);
+		case CONN_GEN_INN_ACK:
+			conn_gen_inn_ack(msg);
 			break;
-		case CONN_NODE_INN_UNABLE:
-			conn_node_inn_unable(msg);
+		case CONN_GEN_INN_UNABLE:
+			conn_gen_inn_unable(msg);
 			break;
-		case CONN_NODE_INN_UNWILLING:
-			conn_node_inn_unwilling(msg);
+		case CONN_GEN_INN_UNWILLING:
+			conn_gen_inn_unwilling(msg);
 			break;
 		case DATA_MSG:
 			data_msg(msg);
 			break;
 		case INVALID_MSG:
-			System.err.println(Thread.currentThread() + " received INVALID_MSG with data: (" + msg.getSrc() + ","
-					+ msg.getData() + "," + msg.getData());
+			System.err.println(Thread.currentThread() + " received INVALID_MSG: (" + msg.getSrc() + "," + msg.getDst() + ","
+					+ msg.getData());
 			break;
 		default:
-			System.err.println(Thread.currentThread() + " received unknown message type " + msg.getType());
+			System.err.println(Thread.currentThread() + " received unknown message type " + msg.getType() + ": (" + msg.getSrc()
+					+ "," + msg.getDst() + "," + msg.getData());
 			break;
 		}
 	}
@@ -318,7 +368,7 @@ public class CubeProtocol
 	/**
 	 * INN must respond to initial request from client to connect.
 	 * 
-	 * Algorithm: send a message to each of my neighbors, asking them to be ANN for this connection.
+	 * Algorithm: broadcast a request asking generic nodes to be ANN for this connection
 	 */
 	private void conn_ext_inn_req(CubeMessage msg) throws IOException
 	{
@@ -338,15 +388,15 @@ public class CubeProtocol
 		// Ensure my state is correct
 		if (innStates.containsKey(addr))
 		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { innStates.get(addr).state, msg.getType() }).send(chan);
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE, new Enum[] { innStates.get(addr).state, msg.getType() })
+					.send(chan);
 			chan.close();
 			return;
 		}
 		INNState innState = new INNState(chan);
 		innStates.put(addr, innState);
 
-		// Edge cases: I might be the only node in the Cube, or I might have an open slot
+		// Edge cases: I might be the only node in the Cube, or I might have an open slot myself
 		if (cubeState.dim == 0 || cubeState.dim > cubeState.neighbors.size())
 		{
 			// Of course, I might not be willing...
@@ -354,7 +404,7 @@ public class CubeProtocol
 			{
 				// Fake a successful address negotiation
 				ANNState annState = new ANNState(cubeState.addr);
-				annState.state = CubeMessage.Type.CONN_NODE_INN_ACK;
+				annState.state = CubeMessage.Type.CONN_GEN_INN_ACK;
 				annStates.put(addr, annState);
 
 				// Send myself a loop back message designating me as ANN, and enter Phase 2
@@ -366,21 +416,19 @@ public class CubeProtocol
 		}
 
 		// Regular processing: initialize state and send the initial broadcast messages
-		innState.state = CubeMessage.Type.CONN_INN_REQ_ANN;
+		innState.state = CubeMessage.Type.CONN_INN_GEN_ANN;
 		msg = new CubeMessage(cubeState.addr, CubeAddress.ZERO_HOPS, innState.state, addr, cubeState.dim);
 		for (Neighbor n : cubeState.neighbors)
 			msg.send(n.chan);
 	}
 
 	/**
-	 * Cube node must respond to INN broadcast request to become ANN and connect client.
+	 * Generic node must respond to INN request to become ANN and connect client.
 	 * 
 	 * Algorithm: determine whether I am able to connect, then whether I am willing to connect. Because the second
-	 * determination could potentially take some time, do it last. Reply to the INN with the result.
-	 * 
-	 * @throws IOException
+	 * determination is more important, do it first. Reply to the INN with the result.
 	 */
-	private void conn_inn_req_ann(CubeMessage msg) throws IOException
+	private void conn_inn_gen_ann(CubeMessage msg) throws IOException
 	{
 		// TODO validate that this message came from a node authorized to be an INN
 		// Ensure the message is properly formatted; do not check source (unknown INN, for now)
@@ -397,128 +445,82 @@ public class CubeProtocol
 			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { annStates.get(addr).state, msg.getType() });
 			return;
 		}
+
+		// Am I willing to connect?
+		if (!amWilling(addr))
+		{
+			reply(msg, CubeMessage.Type.CONN_GEN_INN_UNWILLING, addr);
+			return;
+		}
+
+		// Create state and reply with ability to connect
 		ANNState state = new ANNState(msg.getSrc());
 		annStates.put(addr, state);
-
-		// Am I able and willing to connect?
 		if (cubeState.neighbors.size() == cubeState.dim)
-		{
-			state.state = CubeMessage.Type.CONN_NODE_INN_UNABLE;
-			reply(msg, state.state, addr);
-		} else if (amWilling(addr))
-		{
-			state.state = CubeMessage.Type.CONN_NODE_INN_ACK;
-			reply(msg, state.state, addr);
-		} else
-		{
-			reply(msg, CubeMessage.Type.CONN_NODE_INN_UNWILLING, addr);
-			annStates.remove(addr);
-		}
+			state.state = CubeMessage.Type.CONN_GEN_INN_UNABLE;
+		else
+			state.state = CubeMessage.Type.CONN_GEN_INN_ACK;
+
+		reply(msg, state.state, addr);
 	}
 
 	/**
-	 * INN must respond to Cube node indicating willingness and ability to be ANN.
+	 * INN must respond to generic node indicating willingness and ability to be ANN.
 	 * 
-	 * Algorithm: hand off negotiation to Cube node to begin Phase 2
+	 * Algorithm: hand off negotiation to generic node to begin Phase 2 (unless already in Phase 2)
 	 */
-	private void conn_node_inn_ack(CubeMessage msg) throws IOException
+	private void conn_gen_inn_ack(CubeMessage msg) throws IOException
 	{
-		// Ensure the message is properly formatted; don't check source (reply to broadcast)
-		if (!checkMsg(msg, null, InetSocketAddress.class))
-		{
-			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
+		// Validate the reply message
+		InetSocketAddress addr = validatePhase1(msg);
+		if (null == addr)
 			return;
-		}
-		InetSocketAddress addr = (InetSocketAddress) msg.getData();
-
-		// Ensure we are in the correct state
 		INNState state = innStates.get(addr);
-		if (null == state)
-		{
-			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() });
-			return;
-		} else if (state.state != CubeMessage.Type.CONN_INN_REQ_ANN
-				&& state.state != CubeMessage.Type.CONN_INN_ANN_HANDOFF)
-		{
-			// This is a reply to a broadcast message that could be late, so silently ignore it
-			return;
-		}
 
-		// Hand off to this node, provided we aren't already using someone else as ANN
-		if (state.state == CubeMessage.Type.CONN_INN_REQ_ANN)
+		// Hand off ANN duties, provided we aren't already using someone else as ANN
+		if (state.state == CubeMessage.Type.CONN_INN_GEN_ANN)
 		{
+			// We're still in Phase 1; enter Phase 2
 			state.state = CubeMessage.Type.CONN_INN_ANN_HANDOFF;
 			reply(msg, state.state, addr);
 		} else
-			// Add this response to the list of willing nodes to use in case the current one doesn't pan out
+			// We're in Phase 2 somewhere, but add this node to the ANN "possibles" cache
 			state.acked.add(msg.getSrc());
 	}
 
 	/**
-	 * INN must respond to Cube node indicating its inability to act as ANN.
+	 * INN must respond to generic node indicating its inability to act as ANN.
 	 * 
 	 * Algorithm: record this fact, and determine whether to expand the Cube
 	 */
-	private void conn_node_inn_unable(CubeMessage msg) throws IOException
+	private void conn_gen_inn_unable(CubeMessage msg) throws IOException
 	{
-		// Ensure the message is properly formatted; don't check source (reply to broadcast)
-		if (!checkMsg(msg, null, InetSocketAddress.class))
-		{
-			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
+		// Validate the reply message
+		InetSocketAddress addr = validatePhase1(msg);
+		if (null == addr)
 			return;
-		}
-		InetSocketAddress addr = (InetSocketAddress) msg.getData();
-
-		// Ensure we are in the correct state
-		INNState state = innStates.get(addr);
-		if (null == state)
-		{
-			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() });
-			return;
-		} else if (state.state != CubeMessage.Type.CONN_INN_REQ_ANN
-				&& state.state != CubeMessage.Type.CONN_INN_ANN_HANDOFF)
-		{
-			// This is a reply to a broadcast message that could be late, so silently ignore it
-			return;
-		}
 
 		// Add this response to the list of unable nodes
-		state.unable.add(msg.getSrc());
+		innStates.get(addr).unable.add(msg.getSrc());
 
 		// If everyone is unable or unwilling, we might have to expand the Cube
 		check_expand(addr);
 	}
 
 	/**
-	 * INN must respond to Cube node indicating its unwillingness to act as ANN.
+	 * INN must respond to generic node indicating its unwillingness to act as ANN.
 	 * 
 	 * Algorithm: record this fact, and determine whether to expand the Cube
 	 */
-	private void conn_node_inn_unwilling(CubeMessage msg) throws IOException
+	private void conn_gen_inn_unwilling(CubeMessage msg) throws IOException
 	{
-		// Ensure the message is properly formatted; don't check source (reply to broadcast)
-		if (!checkMsg(msg, null, InetSocketAddress.class))
-		{
-			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
+		// Validate the reply message
+		InetSocketAddress addr = validatePhase1(msg);
+		if (null == addr)
 			return;
-		}
-		InetSocketAddress addr = (InetSocketAddress) msg.getData();
-
-		// Ensure we are in the correct state
-		INNState state = innStates.get(addr);
-		if (null == state)
-		{
-			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() });
-			return;
-		} else if (state.state != CubeMessage.Type.CONN_INN_REQ_ANN
-				&& state.state != CubeMessage.Type.CONN_INN_ANN_HANDOFF)
-		{
-			// This is a reply to a broadcast message that could be late, so silently ignore it
-			return;
-		}
 
 		// Add this response to the list of unwilling nodes
-		state.unwilling.add(msg.getSrc());
+		innStates.get(addr).unwilling.add(msg.getSrc());
 
 		// If everyone is unable or unwilling, we might have to expand the Cube
 		check_expand(addr);
@@ -534,7 +536,7 @@ public class CubeProtocol
 		// Ensure the message is properly formatted
 		if (!checkMsg(msg, null, InetSocketAddress.class))
 		{
-			reply(msg, CubeMessage.Type.INVALID_MSG, null);
+			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
 			return;
 		}
 		InetSocketAddress addr = (InetSocketAddress) msg.getData();
@@ -545,30 +547,53 @@ public class CubeProtocol
 		{
 			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() });
 			return;
-		} else if (annState.state != CubeMessage.Type.CONN_NODE_INN_ACK
-				&& annState.state != CubeMessage.Type.CONN_NODE_INN_UNABLE)
+		} else if (!annState.inn.equals(msg.getSrc()))
+		{
+			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
+			return;
+		} else if (annState.state != CubeMessage.Type.CONN_GEN_INN_ACK && annState.state != CubeMessage.Type.CONN_GEN_INN_UNABLE)
 		{
 			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { annState.state, msg.getType() });
 			return;
 		}
-		annState.state = CubeMessage.Type.CONN_ANN_NEI_REQ;
+		annState.state = CubeMessage.Type.CONN_ANN_NBR_REQ;
 
 		// Determine (1) whether this join will expand the Cube, and (2) the new CubeAddress of the client
 		boolean isExpanding = cubeState.neighbors.size() == cubeState.dim;
 		int link = isExpanding ? cubeState.dim : cubeState.links.not().getLowestSetBit();
 		annState.peerAddr = cubeState.addr.followLink(link);
 
-		// Edge case: I'm the only node in the Cube (I'm already willing to connect)
+		// Edge case: I'm the only node in the Cube
 		if (0 == cubeState.dim)
 		{
-			// Skip ahead in the protocol
-			// NbrState nbrState = new NbrState(cubeState.addr, addr, (int) (Math.random() * Integer.MAX_VALUE));
-			// nbrState.state = CubeMessage.Type.CONN_NEI_ANN_ACK;
-			// nbrStates.put(addr, nbrState);
-			//
-			// annState.state = CubeMessage.Type.CONN_ANN_NEI_SUCC;
-			// send(new CubeMessage(cubeState.addr, cubeState.addr, annState.state, addr));
-			// return;
+			// Try to connect to the client
+			CubeAddress none = CubeAddress.INVALID_ADDRESS;
+			SocketChannel chan;
+			try
+			{
+				chan = SocketChannel.open(addr);
+			}
+			catch (IOException e)
+			{
+				// Phase 2 failed. Since I'm the only node in the Cube, Phase 1 also will fail.
+				new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(msg.getChannel());
+				msg.getChannel().close();
+				annStates.remove(addr);
+				innStates.remove(addr);
+				return;
+			}
+			
+			// Fake a successful willingness to connect
+			NbrState nbrState = new NbrState(cubeState.addr, addr, (int) (Math.random() * Integer.MAX_VALUE));
+			nbrState.state = CubeMessage.Type.CONN_NBR_ANN_ACK;
+			nbrStates.put(addr, nbrState);
+
+			// Enter Phase 3
+			annState.state = CubeMessage.Type.CONN_ANN_EXT_OFFER;
+			ArrayList<Integer> nonces = new ArrayList<>();
+			nonces.add(nbrState.nonce);
+			new CubeMessage(none, annState.peerAddr, annState.state, nonces).send(chan);
+			return;
 		}
 
 		// Determine whether all of the new peer's neighbors are willing to accept the connection
@@ -594,6 +619,33 @@ public class CubeProtocol
 	// new CubeMessage(none, state.peerAddr, state.state, nonces).send(annChan);
 	// }
 
+	// Phase 1 validation helper
+	private InetSocketAddress validatePhase1(CubeMessage msg) throws IOException
+	{
+		// Ensure the message is properly formatted; don't check source (reply to broadcast)
+		if (!checkMsg(msg, null, InetSocketAddress.class))
+		{
+			reply(msg, CubeMessage.Type.INVALID_MSG, msg.getType());
+			return null;
+		}
+		InetSocketAddress addr = (InetSocketAddress) msg.getData();
+
+		// Ensure we are in the correct state
+		INNState state = innStates.get(addr);
+		if (null == state)
+		{
+			reply(msg, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() });
+			return null;
+		} else if (state.state != CubeMessage.Type.CONN_INN_GEN_ANN && state.state != CubeMessage.Type.CONN_INN_ANN_HANDOFF)
+		{
+			// This is a broadcast message reply that could have been simply too slow, so silently ignore it
+			return null;
+		}
+
+		// Message format and current state are both valid
+		return addr;
+	}
+
 	// Check whether we need to expand the dimension of the cube
 	private void check_expand(InetSocketAddress clientAddr) throws IOException
 	{
@@ -611,7 +663,7 @@ public class CubeProtocol
 			// Increase the hop count
 			++state.hops;
 			CubeAddress hopAddr = new CubeAddress(Integer.toString(-state.hops));
-			CubeMessage msg = new CubeMessage(cubeState.addr, hopAddr, CubeMessage.Type.CONN_INN_REQ_ANN, clientAddr,
+			CubeMessage msg = new CubeMessage(cubeState.addr, hopAddr, CubeMessage.Type.CONN_INN_GEN_ANN, clientAddr,
 					cubeState.dim);
 			for (Neighbor n : cubeState.neighbors)
 				msg.send(n.chan);
@@ -646,39 +698,6 @@ public class CubeProtocol
 	 */
 
 	/**
-	 * Client must respond to ANN indication that connection has finished.
-	 * 
-	 * Algorithm: store the Cube's dimension and close the connection to the INN and ANN
-	 */
-	private void conn_ann_ext_conn_succ(CubeMessage msg) throws IOException
-	{
-		// Ensure the message is properly formatted
-		cltState.annChan = msg.getChannel();
-		CubeAddress none = CubeAddress.INVALID_ADDRESS;
-		if (!checkMsg(msg, null, cubeState.addr, Integer.class))
-		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_MSG, msg).send(cltState.annChan);
-			cltState.annChan.close();
-			return;
-		}
-
-		// Ensure we are in the correct state
-		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
-		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { cltState.state, CubeMessage.Type.CONN_ANN_EXT_OFFER }).send(cltState.annChan);
-			cltState.annChan.close();
-			return;
-		}
-
-		// Set the dimension and clean up
-		cubeState.dim = (int) msg.getData();
-		cltState.annChan.close();
-		cltState.innChan.close();
-		cltState = null;
-	}
-
-	/**
 	 * Client must respond to an offer of a new CubeAddress from an ANN.
 	 * 
 	 * Algorithm: acknowledge the offer
@@ -697,10 +716,10 @@ public class CubeProtocol
 		}
 
 		// Ensure we are in the correct state
-		if (cltState.state != CubeMessage.Type.CONN_EXT_INN_REQ)
+		if (cltState.state != CubeMessage.Type.CONN_EXT_INN_ATTACH)
 		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { cltState.state, CubeMessage.Type.CONN_ANN_EXT_OFFER }).send(cltState.annChan);
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE, new Enum[] { cltState.state,
+					CubeMessage.Type.CONN_ANN_EXT_OFFER }).send(cltState.annChan);
 			cltState.annChan.close();
 			return;
 		}
@@ -724,17 +743,6 @@ public class CubeProtocol
 	}
 
 	/**
-	 * INN must respond to node unable to be ANN.
-	 * 
-	 * Algorithm: ask a different node at the same hop count to be ANN; if none remain, increase the hop count
-	 */
-	private void conn_ann_inn_unable(CubeMessage msg)
-	{
-		// Ensure we are in the correct state
-
-	}
-
-	/**
 	 * INN must respond to node unwilling to be ANN.
 	 * 
 	 * Algorithm: ask a different node at the same hop count to be ANN; if none remain, increase the hop count
@@ -750,7 +758,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: send CubeAddress to client
 	 */
-	private void conn_ann_nei_adv(CubeMessage msg)
+	private void conn_ann_nbr_adv(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -761,7 +769,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up connection state
 	 */
-	private void conn_ann_nei_fail(CubeMessage msg)
+	private void conn_ann_nbr_fail(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -772,7 +780,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up connection state, including disconnecting client if already connected
 	 */
-	private void conn_ann_nei_nadv(CubeMessage msg)
+	private void conn_ann_nbr_nadv(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -783,7 +791,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: return whether neighbor is willing
 	 */
-	private void conn_ann_nei_req(CubeMessage msg)
+	private void conn_ann_nbr_req(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -794,7 +802,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up connection state
 	 */
-	private void conn_ann_nei_succ(CubeMessage msg)
+	private void conn_ann_nbr_succ(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -820,8 +828,8 @@ public class CubeProtocol
 		// Ensure my state is correct
 		if (innStates.containsKey(addr))
 		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { innStates.get(addr).state, CubeMessage.Type.CONN_EXT_INN_REQ }).send(chan);
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE, new Enum[] { innStates.get(addr).state,
+					CubeMessage.Type.CONN_EXT_INN_ATTACH }).send(chan);
 			chan.close();
 			return;
 		}
@@ -831,15 +839,15 @@ public class CubeProtocol
 		{
 			// Reply (skip verifying the nonce)
 			++cubeState.dim;
-			reply(msg, CubeMessage.Type.CONN_NEI_EXT_ACK, cubeState.dim);
+			reply(msg, CubeMessage.Type.CONN_NBR_EXT_ACK, cubeState.dim);
 
 			return;
 		}
 
 		// Send success message to the new neighbors
 		for (Neighbor n : cubeState.neighbors)
-			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_ANN_NEI_SUCC,
-					msg.getChannel().getRemoteAddress()));
+			send(new CubeMessage(cubeState.addr, n.addr, CubeMessage.Type.CONN_ANN_NBR_SUCCESS, msg.getChannel()
+					.getRemoteAddress()));
 	}
 
 	/**
@@ -859,18 +867,18 @@ public class CubeProtocol
 	 * 
 	 * @throws IOException
 	 */
-	private void conn_ext_nei_ack(CubeMessage msg) throws IOException
+	private void conn_ext_nbr_ack(CubeMessage msg) throws IOException
 	{
 		// Ensure we are in the correct state
 		CubeAddress client = msg.getSrc();
 		SocketChannel chan = msg.getChannel();
 		NbrState state = nbrStates.get(client);
-		if (null == state || state.state != CubeMessage.Type.CONN_NEI_EXT_OFFER)
+		if (null == state || state.state != CubeMessage.Type.CONN_NBR_EXT_OFFER)
 		{
-			new CubeMessage(CubeAddress.INVALID_ADDRESS, client, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { annStates.get(client).state, CubeMessage.Type.CONN_INN_REQ_ANN });
+			new CubeMessage(CubeAddress.INVALID_ADDRESS, client, CubeMessage.Type.INVALID_STATE, new Enum[] {
+					annStates.get(client).state, CubeMessage.Type.CONN_INN_GEN_ANN });
 			if (null != state)
-				new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NEI_ANN_FAIL, chan.getLocalAddress());
+				new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NBR_ANN_FAIL, chan.getLocalAddress());
 			return;
 		}
 
@@ -878,7 +886,7 @@ public class CubeProtocol
 		if (!checkMsg(msg, client, CubeAddress.INVALID_ADDRESS, ArrayList.class))
 		{
 			new CubeMessage(CubeAddress.INVALID_ADDRESS, client, CubeMessage.Type.INVALID_MSG, null);
-			new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NEI_ANN_FAIL, chan.getLocalAddress());
+			new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NBR_ANN_FAIL, chan.getLocalAddress());
 			return;
 		}
 		@SuppressWarnings("unchecked")
@@ -889,7 +897,7 @@ public class CubeProtocol
 		if (replyNonces.size() != 1 || replyNonces.contains(state.nonce))
 		{
 			new CubeMessage(CubeAddress.INVALID_ADDRESS, client, CubeMessage.Type.INVALID_DATA, null);
-			new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NEI_ANN_FAIL, chan.getLocalAddress());
+			new CubeMessage(cubeState.addr, state.ann, CubeMessage.Type.CONN_NBR_ANN_FAIL, chan.getLocalAddress());
 			return;
 		}
 
@@ -900,7 +908,7 @@ public class CubeProtocol
 		listener.register(chan);
 
 		// Update the ANN
-		state.state = CubeMessage.Type.CONN_NEI_ANN_SUCC;
+		state.state = CubeMessage.Type.CONN_NBR_ANN_SUCC;
 		send(new CubeMessage(cubeState.addr, state.ann, state.state, client));
 	}
 
@@ -920,7 +928,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: record this fact, and if all neighbors have reported in, move to Phase 3
 	 */
-	private void conn_nei_ann_ack(CubeMessage msg)
+	private void conn_nbr_ann_ack(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -931,7 +939,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: instruct all neighbors to tear down their connections, and inform client and INN
 	 */
-	private void conn_nei_ann_fail(CubeMessage msg)
+	private void conn_nbr_ann_fail(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -942,7 +950,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up state and inform INN
 	 */
-	private void conn_nei_ann_nak(CubeMessage msg)
+	private void conn_nbr_ann_nak(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -954,7 +962,7 @@ public class CubeProtocol
 	 * Algorithm: record this fact, and if all neighbors have reported in, instruct them to advertise their
 	 * CubeAddresses
 	 */
-	private void conn_nei_ann_succ(CubeMessage msg)
+	private void conn_nbr_ann_succ(CubeMessage msg)
 	{
 		// Ensure we are in the correct state
 
@@ -965,7 +973,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: store this information
 	 */
-	private void conn_nei_ext_ack(CubeMessage msg) throws IOException
+	private void conn_nbr_ext_ack(CubeMessage msg) throws IOException
 	{
 		// Ensure the message is properly formatted
 		CubeAddress nAddr = msg.getSrc();
@@ -982,8 +990,8 @@ public class CubeProtocol
 		// Ensure we are in the correct state
 		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
 		{
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { cltState.state, CubeMessage.Type.CONN_NEI_EXT_ACK }).send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE, new Enum[] { cltState.state,
+					CubeMessage.Type.CONN_NBR_EXT_ACK }).send(chan);
 			chan.close();
 			cltState.annChan.close();
 			return;
@@ -993,8 +1001,8 @@ public class CubeProtocol
 		int link = cubeState.addr.relativeLink(nAddr);
 		if (-1 == link)
 		{
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_DATA,
-					new CubeAddress[] { cubeState.addr, nAddr }).send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_DATA, new CubeAddress[] { cubeState.addr, nAddr })
+					.send(chan);
 			chan.close();
 			cltState.annChan.close();
 			return;
@@ -1012,7 +1020,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: respond with the correct message (including the nonces), if we're willing to accept the connection
 	 */
-	private void conn_nei_ext_offer(CubeMessage msg) throws IOException
+	private void conn_nbr_ext_offer(CubeMessage msg) throws IOException
 	{
 		// Ensure the message is properly formatted
 		SocketChannel chan = msg.getChannel();
@@ -1028,8 +1036,8 @@ public class CubeProtocol
 		// Ensure we are in the correct state
 		if (cltState.state != CubeMessage.Type.CONN_EXT_ANN_ACK)
 		{
-			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE,
-					new Enum[] { cltState.state, CubeMessage.Type.CONN_NEI_EXT_OFFER }).send(chan);
+			new CubeMessage(none, none, CubeMessage.Type.INVALID_STATE, new Enum[] { cltState.state,
+					CubeMessage.Type.CONN_NBR_EXT_OFFER }).send(chan);
 			chan.close();
 			cltState.annChan.close();
 			return;
@@ -1038,11 +1046,11 @@ public class CubeProtocol
 		// Are we willing to make this connection?
 		cltState.nbrChans.add(chan);
 		if (amWilling((InetSocketAddress) chan.getLocalAddress()))
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NEI_ACK, cltState.nonces).send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NBR_ACK, cltState.nonces).send(chan);
 		else
 		{
 			// Close existing channels and wait for new ANN to contact me to try again
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NEI_NAK, null).send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.CONN_EXT_NBR_NAK, null).send(chan);
 			for (SocketChannel c : cltState.nbrChans)
 				c.close();
 			cltState.annChan.close();
@@ -1090,8 +1098,7 @@ public class CubeProtocol
 	{
 		// Receive and check the reply
 		CubeMessage reply = CubeMessage.recv(annChan);
-		if (reply.getType() != CubeMessage.Type.CONN_EXT_ANN_ACK
-				|| !checkMsg(reply, peer, CubeAddress.INVALID_ADDRESS, null))
+		if (reply.getType() != CubeMessage.Type.CONN_EXT_ANN_ACK || !checkMsg(reply, peer, CubeAddress.INVALID_ADDRESS, null))
 		{
 			annChan.close();
 			return false;
@@ -1099,9 +1106,9 @@ public class CubeProtocol
 
 		// Send an offer to connect (as a new neighbor)
 		SocketChannel nbrChan = SocketChannel.open(addr);
-		new CubeMessage(none, peer, CubeMessage.Type.CONN_NEI_EXT_OFFER, null).send(nbrChan);
+		new CubeMessage(none, peer, CubeMessage.Type.CONN_NBR_EXT_OFFER, null).send(nbrChan);
 		reply = CubeMessage.recv(nbrChan);
-		if (reply.getType() != CubeMessage.Type.CONN_EXT_NEI_ACK
+		if (reply.getType() != CubeMessage.Type.CONN_EXT_NBR_ACK
 				|| !checkMsg(reply, peer, CubeAddress.INVALID_ADDRESS, ArrayList.class))
 		{
 			annChan.close();
@@ -1124,7 +1131,7 @@ public class CubeProtocol
 		listener.register(nbrChan);
 
 		// Complete the handshake
-		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_NEI_EXT_ACK, null).send(nbrChan);
+		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_NBR_EXT_ACK, null).send(nbrChan);
 		new CubeMessage(cubeState.addr, peer, CubeMessage.Type.CONN_ANN_EXT_CONN_SUCC, cubeState.dim).send(annChan);
 		return true;
 	}
@@ -1144,9 +1151,8 @@ public class CubeProtocol
 	{
 		cltState = new CltState();
 		cltState.innChan = SocketChannel.open(cubeAddr);
-		cltState.state = CubeMessage.Type.CONN_EXT_INN_REQ;
-		new CubeMessage(CubeAddress.INVALID_ADDRESS, CubeAddress.INVALID_ADDRESS, cltState.state, myAddr)
-				.send(cltState.innChan);
+		cltState.state = CubeMessage.Type.CONN_EXT_INN_ATTACH;
+		new CubeMessage(CubeAddress.INVALID_ADDRESS, CubeAddress.INVALID_ADDRESS, cltState.state, myAddr).send(cltState.innChan);
 		listener.register(cltState.innChan);
 	}
 
