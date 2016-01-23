@@ -1,10 +1,12 @@
 package hyper;
 
+import java.util.ArrayList;
+
 /**
  * State variables associated with acting as ANN. The {@link CubeProtocol} class includes a list of these, one for each
  * simultaneously connecting client.
  */
-class ANNState
+class ANNState extends State
 {
 	// Initiating INN
 	CubeAddress inn;
@@ -15,10 +17,21 @@ class ANNState
 	// Count of willing nodes
 	int willing = 0;
 
-	// Phase 2 state of the ANN, used for protocol state validation
-	CubeMessage.Type state = null;
+	// List of invalid nodes
+	ArrayList<CubeAddress> invalid = new ArrayList<>();
 
-	public ANNState(CubeAddress inn) {
+	// List of nonces from all neighbors (including me)
+	ArrayList<Integer> nonces = new ArrayList<>();
+
+	public ANNState(CubeAddress inn)
+	{
 		this.inn = inn;
+	}
+
+	@Override
+	public String toString()
+	{
+		return "State: " + state + "\nINN, Peer: " + inn + ", " + peerAddr + "\nWilling, Invalid, Nonces: " + willing + ", "
+				+ invalid.toString() + ", " + nonces.toString();
 	}
 }

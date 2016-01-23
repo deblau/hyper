@@ -2,14 +2,13 @@ package hyper;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 
 public class TestClient
 {
 	private MessageListener listener;
 	private CubeProtocol protocol;
 
-	public TestClient(int port) throws UnknownHostException, IOException, InterruptedException
+	public TestClient(int port)
 	{
 		listener = new MessageListener(new InetSocketAddress(port), false);
 		listener.start();
@@ -18,23 +17,23 @@ public class TestClient
 		protocol.setListener(listener);
 	}
 
-	private void request_join(int port) throws IOException 
+	private void request_join(int port) throws IOException
 	{
 		protocol.connect(new InetSocketAddress(port), (InetSocketAddress) listener.getAddress());
 	}
 
-	private void send_data(CubeAddress addr, String data) throws Exception
+	private void send_data(CubeAddress addr, String data) throws IOException
 	{
 		CubeState state = protocol.getCubeState();
 		protocol.send(new CubeMessage(state.addr, addr, CubeMessage.Type.DATA_MSG, data));
 	}
 
-	public static void main(String[] args) throws Exception
+	public static void main(String[] args) throws IOException
 	{
 		int node0port = 20000;
 		
 		// Set up initial node, will get CubeAddress 0
-		TestClient client0 = new TestClient(node0port);
+		new TestClient(node0port);
 
 		// First client, will get CubeAddress 1
 		TestClient client1 = new TestClient(node0port+1000);

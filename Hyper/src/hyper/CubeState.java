@@ -19,4 +19,11 @@ class CubeState
 	// Bitmap of which nodes are connected; this is used by the broadcast algorithm, and must be a new Object since
 	// BigInteger.ZERO is final
 	CubeAddress links = new CubeAddress("0");
+
+	@Override
+	public String toString()
+	{
+		return "Dim: " + dim + "\nMy address: " + addr + "\nLinks/Neighbors: " + links + ", " + neighbors.toString();
+	}
+
 }
