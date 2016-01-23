@@ -231,6 +231,10 @@ class CubeMessage implements Serializable
 		// Message between Cube nodes, containing useful data
 		// Data: arbitrary
 		DATA_MSG,
+
+		// Message from a Cube node, informing its neighbors that it's disconnecting
+		// Data: (optional) String providing a reason
+		NODE_SHUTDOWN,
 	};
 
 	// Source Cube address
@@ -260,20 +264,16 @@ class CubeMessage implements Serializable
 	/*
 	 * For sending regular messages when the source and destination already have Cube addresses
 	 */
-	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data) throws IOException
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data)
 	{
-		if (dst != null && BigInteger.ZERO.compareTo(dst) > 0)
-			throw new IOException("Wrong constructor CubeMessage() called for broadcast address");
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
 		this.data = data;
 	}
 
-	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim) throws IOException
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim)
 	{
-		if (dst != null && BigInteger.ZERO.compareTo(dst) <= 0)
-			throw new IOException("Wrong constructor CubeMessage() called for non-broadcast address");
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
@@ -286,21 +286,29 @@ class CubeMessage implements Serializable
 	 * 
 	 * @param chan
 	 *            The {@link SocketChannel}
-	 * @throws IOException
+	 * @return Whether the message was sent
 	 */
-	void send(SocketChannel chan) throws IOException
+	boolean send(SocketChannel chan)
 	{
 		/*
 		 * This is a non-blocking send; the receive on the other end is still blocking. Note that the channel is not
 		 * serializeable, so we have to save it temporarily.
 		 */
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		SocketChannel saved = channel;
-		channel = null;
-		new ObjectOutputStream(baos).writeObject(this);
-		channel = saved;
-		ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
-		chan.write(buf);
+		try
+		{
+			ByteArrayOutputStream baos = new ByteArrayOutputStream();
+			SocketChannel saved = channel;
+			channel = null;
+			new ObjectOutputStream(baos).writeObject(this);
+			channel = saved;
+			ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
+			chan.write(buf);
+			return true;
+		}
+		catch (IOException e)
+		{
+			return false;
+		}
 	}
 
 	/**
@@ -308,7 +316,7 @@ class CubeMessage implements Serializable
 	 * 
 	 * @param chan
 	 *            The {@link SocketChannel}
-	 * @return the new {@link CubeMessage}
+	 * @return a received {@link CubeMessage}, or <code>null</code> if unsuccessful
 	 * @throws IOException
 	 */
 	static CubeMessage recv(SocketChannel chan)
@@ -321,12 +329,10 @@ class CubeMessage implements Serializable
 		}
 		catch (ClassNotFoundException e)
 		{
-			e.printStackTrace();
 			return null;
 		}
 		catch (IOException e)
 		{
-			System.err.println(Thread.currentThread() + " got IOException " + chan);
 			return null;
 		}
 	}
