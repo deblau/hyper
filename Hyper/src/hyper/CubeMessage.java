@@ -196,12 +196,6 @@ class CubeMessage implements Serializable
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_ANN_NBR_ADV,
 
-		// Message from ANN to new neighbors, indicating that advertising node addresses is NOT okay
-		// Src: ANN
-		// Dest: Connected node two hops from ANN
-		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_NBR_NADV,
-
 		/**
 		 * Messages exchanged during Phase 5: CubeAddress advertisement
 		 */
