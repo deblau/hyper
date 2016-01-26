@@ -17,8 +17,7 @@ class CubeMessage implements Serializable
 	private static final long serialVersionUID = -2640817563881316595L;
 
 	// Message types
-	public enum Type
-	{
+	public enum Type {
 
 		// Invalid message format
 		// Src: varies
@@ -106,6 +105,12 @@ class CubeMessage implements Serializable
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_INN_ANN_HANDOFF,
 
+		// Message from INN to selected "unable" address negotiation node (ANN), tentatively handing off negotiation
+		// Src: INN
+		// Dest: Connected node
+		// Data: InetSocketAddress of client's MessageListener
+		CONN_INN_ANN_OVERRIDE,
+
 		/**
 		 * Messages exchanged during Phase 2: Confirming the attachment point
 		 */
@@ -114,7 +119,7 @@ class CubeMessage implements Serializable
 		// Src: ANN
 		// Dest: Connected node two hops from ANN (first hop is the tentative connection point)
 		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_NBR_REQ,
+		CONN_ANN_NBR_REQUEST,
 
 		// Message from new neighbor to ANN, declaring willingness to accept connection
 		// Src: Connected node two hops from ANN
@@ -150,11 +155,11 @@ class CubeMessage implements Serializable
 		// Data: null
 		CONN_EXT_ANN_NAK,
 
-		// Message from ANN to new neighbor, declaring negotiation a success
+		// Message from ANN to new neighbor, requesting that neighbors attempt to connect
 		// Src: ANN
 		// Dest: Connected node two hops from ANN
 		// Data: InetSocketAddress of client's MessageListener
-		CONN_ANN_NBR_SUCCESS,
+		CONN_ANN_NBR_CONNECT,
 
 		// Message from ANN to new neighbor, declaring negotiation a failure
 		// Src: ANN
@@ -184,17 +189,17 @@ class CubeMessage implements Serializable
 		// Data: null
 		CONN_EXT_NBR_NAK,
 
-		// Message from new neighbor to ANN, indicating successful connection
+		// Message from new neighbor to ANN, indicating connection established
 		// Src: Connected node two hops from ANN
 		// Dest: ANN
 		// Data: InetSocketAddress of client's MessageListener
-		CONN_NBR_ANN_SUCCESS,
+		CONN_NBR_ANN_ESTABLISHED,
 
 		// Message from new neighbor to ANN, indicating failed connection
 		// Src: Connected node two hops from ANN
 		// Dest: ANN
 		// Data: InetSocketAddress of client's MessageListener
-		CONN_NBR_ANN_FAIL,
+		CONN_NBR_ANN_NOCONN,
 
 		// Message from ANN to new neighbors, indicating that advertising node addresses is okay
 		// Src: ANN
@@ -211,6 +216,18 @@ class CubeMessage implements Serializable
 		// Dest: client's CubeAddress
 		// Data: null
 		CONN_NBR_EXT_ACK,
+
+		// Message from new neighbor to ANN, indicating that the
+		// Src: neighbor's CubeAddress
+		// Dest: client's CubeAddress
+		// Data: null
+		CONN_NBR_ANN_SUCCESS,
+
+		// Message from new neighbor to ANN, asking for confirmation that all neighbors are connected
+		// Src: neighbor's CubeAddress
+		// Dest: client's CubeAddress
+		// Data: null
+		CONN_NBR_ANN_FAIL,
 
 		// Message from ANN to client, declaring successful address negotiation
 		// Src: ANN
@@ -270,16 +287,14 @@ class CubeMessage implements Serializable
 	/*
 	 * For sending regular messages when the source and destination already have Cube addresses
 	 */
-	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data)
-	{
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data) {
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
 		this.data = data;
 	}
 
-	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim)
-	{
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim) {
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
@@ -310,8 +325,7 @@ class CubeMessage implements Serializable
 			ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
 			chan.write(buf);
 			return true;
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			return false;
 		}
@@ -332,12 +346,10 @@ class CubeMessage implements Serializable
 			CubeMessage msg = (CubeMessage) new ObjectInputStream(Channels.newInputStream(chan)).readObject();
 			msg.channel = chan;
 			return msg;
-		}
-		catch (ClassNotFoundException e)
+		} catch (ClassNotFoundException e)
 		{
 			return null;
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			return null;
 		}
