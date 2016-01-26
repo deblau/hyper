@@ -267,8 +267,7 @@ public class CubeProtocol
 		return cubeState;
 	}
 
-	public CubeProtocol(MessageListener listener)
-	{
+	public CubeProtocol(MessageListener listener) {
 		this.listener = listener;
 		listener.setProtocol(this);
 
@@ -321,8 +320,7 @@ public class CubeProtocol
 			}
 		}
 
-		switch (msg.getType())
-		{
+		switch (msg.getType()) {
 		case CONN_ANN_EXT_OFFER:
 			conn_ann_ext_offer(msg);
 			break;
@@ -406,15 +404,15 @@ public class CubeProtocol
 			invalid_address(msg);
 			break;
 		case INVALID_MSG:
-			System.err.println(Thread.currentThread() + " received INVALID_MSG: (" + msg.getSrc() + "," + msg.getDst() + ","
-					+ msg.getData() + ")");
+			System.err.println(Thread.currentThread() + " received INVALID_MSG: (" + msg.getSrc() + "," + msg.getDst()
+					+ "," + msg.getData() + ")");
 			break;
 		case NODE_SHUTDOWN:
 			node_shutdown(msg);
 			break;
 		default:
-			System.err.println(Thread.currentThread() + " received unknown message type " + msg.getType() + ": (" + msg.getSrc()
-					+ "," + msg.getDst() + "," + msg.getData() + ")");
+			System.err.println(Thread.currentThread() + " received unknown message type " + msg.getType() + ": ("
+					+ msg.getSrc() + "," + msg.getDst() + "," + msg.getData() + ")");
 			break;
 		}
 	}
@@ -430,8 +428,6 @@ public class CubeProtocol
 	 */
 	private void conn_ext_inn_attach(CubeMessage msg)
 	{
-		// TODO authorize this node acting as INN
-
 		// Validate the message
 		InetSocketAddress addr = (InetSocketAddress) validateExt(msg, innStates, null);
 		if (null == addr)
@@ -479,7 +475,6 @@ public class CubeProtocol
 	 */
 	private void conn_inn_gen_ann(CubeMessage msg)
 	{
-		// TODO validate that this message came from a node authorized to be an INN
 		// Validate the message
 		InetSocketAddress addr = validateMsg(msg, annStates, null);
 		if (null == addr)
@@ -750,8 +745,7 @@ public class CubeProtocol
 			// Connect to the client's CubeProtocol
 			chan = SocketChannel.open(addr);
 			listener.register(chan);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			annBail(addr);
 			return;
@@ -883,8 +877,7 @@ public class CubeProtocol
 		try
 		{
 			nbrState.chan = SocketChannel.open(addr);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// The ANN was able to connect to the client but I can't, so bail
 			nbrState.state = CubeMessage.Type.CONN_NBR_ANN_FAIL;
@@ -980,8 +973,7 @@ public class CubeProtocol
 			// The ANN connection is already registered; re-registering here will throw a CanceledKeyException
 			if (!cubeState.addr.equals(nbrState.ann))
 				listener.register(chan);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// Bail
 			nbrState.state = CubeMessage.Type.CONN_NBR_ANN_FAIL;
@@ -1058,6 +1050,10 @@ public class CubeProtocol
 			return;
 
 		// It's legit, bail
+		ANNState annState = annStates.remove(addr);
+		int link = cubeState.addr.relativeLink(annState.peerAddr);
+		// TODO send a failure message to the client
+		quietClose(cubeState.neighbors.get(link));
 		annBail(addr);
 	}
 
@@ -1123,8 +1119,8 @@ public class CubeProtocol
 		int link = cubeState.addr.relativeLink(nAddr);
 		if (-1 == link)
 		{
-			new CubeMessage(cubeState.addr, CubeAddress.INVALID_ADDRESS, CubeMessage.Type.INVALID_DATA, new CubeAddress[] {
-					cubeState.addr, nAddr }).send(chan);
+			new CubeMessage(cubeState.addr, CubeAddress.INVALID_ADDRESS, CubeMessage.Type.INVALID_DATA,
+					new CubeAddress[] { cubeState.addr, nAddr }).send(chan);
 			quietClose(chan);
 			return;
 		}
@@ -1257,13 +1253,14 @@ public class CubeProtocol
 		State state = cltState;
 		if (null == state)
 		{
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() }).send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() })
+					.send(chan);
 			quietClose(chan);
 			return null;
 		} else if (!states.contains(state.state))
 		{
-			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE, new Enum[] { state.state, msg.getType() })
-					.send(chan);
+			new CubeMessage(cubeState.addr, none, CubeMessage.Type.INVALID_STATE,
+					new Enum[] { state.state, msg.getType() }).send(chan);
 			quietClose(chan);
 			return null;
 		}
@@ -1303,13 +1300,14 @@ public class CubeProtocol
 		{
 			if (null == states)
 				return msg.getData();
-			new CubeMessage(none, msg.getSrc(), CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() }).send(chan);
+			new CubeMessage(none, msg.getSrc(), CubeMessage.Type.INVALID_STATE, new Enum[] { null, msg.getType() })
+					.send(chan);
 			quietClose(chan);
 			return null;
 		} else if (!states.contains(state.state))
 		{
-			new CubeMessage(none, msg.getSrc(), CubeMessage.Type.INVALID_STATE, new Enum[] { state.state, msg.getType() })
-					.send(chan);
+			new CubeMessage(none, msg.getSrc(), CubeMessage.Type.INVALID_STATE,
+					new Enum[] { state.state, msg.getType() }).send(chan);
 			quietClose(chan);
 			return null;
 		}
@@ -1326,8 +1324,7 @@ public class CubeProtocol
 		try
 		{
 			chan.close();
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// Fail silently
 		}
@@ -1338,8 +1335,7 @@ public class CubeProtocol
 		try
 		{
 			return (InetSocketAddress) chan.getRemoteAddress();
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// The channel isn't connected
 			return null;
@@ -1369,8 +1365,7 @@ public class CubeProtocol
 		try
 		{
 			annChan = SocketChannel.open(addr);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// If the address is unreachable, bail
 			new CubeMessage(none, none, CubeMessage.Type.CONN_INN_EXT_CONN_REFUSED, null).send(peerChan);
@@ -1409,8 +1404,7 @@ public class CubeProtocol
 		try
 		{
 			listener.register(annChan);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			// If we can't register this channel after sending a boatload of messages, well...
 			quietClose(annChan);
@@ -1550,8 +1544,7 @@ public class CubeProtocol
 		try
 		{
 			cltState.innChan = SocketChannel.open(innAddr);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			throw new CubeException("connect() unable to open a SocketChannel to " + innAddr);
 		}
@@ -1563,8 +1556,7 @@ public class CubeProtocol
 		try
 		{
 			listener.register(cltState.innChan);
-		}
-		catch (IOException e)
+		} catch (IOException e)
 		{
 			throw new CubeException("connect() unable to register the connection to " + innAddr);
 		}
@@ -1617,8 +1609,8 @@ public class CubeProtocol
 		if (msg.getDst().bitLength() > cubeState.dim)
 		{
 			// Tried to send a message to a node outside the address space
-			send(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessage.Type.INVALID_ADDRESS, new Serializable[] {
-					msg.getType(), msg.getData() }));
+			send(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessage.Type.INVALID_ADDRESS,
+					new Serializable[] { msg.getType(), msg.getData() }));
 			return false;
 		}
 
@@ -1633,8 +1625,8 @@ public class CubeProtocol
 			if (-1 == link)
 			{
 				// Tried to send a message to a non-connected node
-				send(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessage.Type.INVALID_ADDRESS, new Serializable[] {
-						msg.getType(), msg.getData() }));
+				send(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessage.Type.INVALID_ADDRESS,
+						new Serializable[] { msg.getType(), msg.getData() }));
 				return false;
 			}
 			return msg.send(cubeState.neighbors.get(link));
@@ -1745,8 +1737,7 @@ public class CubeProtocol
 			{
 				blockingThread = Thread.currentThread();
 				blockingThread.wait();
-			}
-			catch (InterruptedException e)
+			} catch (InterruptedException e)
 			{
 				if (available())
 				{
