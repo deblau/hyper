@@ -1,6 +1,5 @@
 package hyper;
 
-import java.net.SocketAddress;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -13,7 +12,7 @@ class NbrState extends State
 	CubeAddress ann;
 
 	// Address of client
-	SocketAddress addr;
+	CubeAddress addr = null;
 	
 	// Connection to client
 	SocketChannel chan = null;
@@ -21,10 +20,9 @@ class NbrState extends State
 	// Nonce to use when connecting
 	Integer nonce = (int) (Math.random() * Integer.MAX_VALUE);
 
-	public NbrState(CubeAddress ann, SocketAddress addr)
+	public NbrState(CubeAddress ann)
 	{
 		this.ann = ann;
-		this.addr = addr;
 	}
 
 	@Override

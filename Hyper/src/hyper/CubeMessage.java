@@ -60,6 +60,12 @@ class CubeMessage implements Serializable
 		// Data: InetSocketAddress of client's MessageListener
 		CONN_ANN_INN_FAIL,
 
+		// Message from ANN to the client, declaring unsuccessful address negotiation
+		// Src: INVALID_ADDRESS
+		// Dest: INN
+		// Data: InetSocketAddress of client's MessageListener
+		CONN_ANN_EXT_FAIL,
+
 		/**
 		 * Messages exchanged during Phase 1: Determining possible attachment point
 		 */
