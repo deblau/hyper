@@ -30,6 +30,6 @@ class NbrState extends State
 	@Override
 	public String toString()
 	{
-		return "State: " + state + "\nANN: " + ann + "\nClient/Nonde: " + addr + ", " + nonce;
+		return "State: " + state + "\nANN: " + ann + "\nClient/Nonce: " + addr + ", " + nonce;
 	}
 }

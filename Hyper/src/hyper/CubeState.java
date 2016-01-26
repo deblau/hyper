@@ -1,6 +1,7 @@
 package hyper;
 
 import java.math.BigInteger;
+import java.nio.channels.SocketChannel;
 import java.util.Vector;
 
 /**
@@ -15,7 +16,7 @@ class CubeState
 	CubeAddress addr = CubeAddress.ZERO;
 
 	// My connected neighbor nodes
-	Vector<Neighbor> neighbors = new Vector<>();
+	Vector<SocketChannel> neighbors = new Vector<>();
 
 	// Bitmap of which nodes are connected; this is used by the broadcast algorithm, and must be a new Object since
 	// BigInteger.ZERO is final
@@ -34,9 +35,17 @@ class CubeState
 	}
 
 	// Add a neighbor
-	void addNeighbor(int link, Neighbor n)
+	void addNeighbor(int link, SocketChannel chan)
 	{
-		neighbors.add(link, n);
+		// Increase the Cube dimension, if necessary. Remember that link is 0-based, while dim is 1-based
+		if (link + 1 > dim)
+		{
+			dim = link + 1;
+			neighbors.setSize(dim);
+		}
+		
+		// Add the neighbor, and update links
+		neighbors.set(link, chan);
 		links = new CubeAddress(links.setBit(link).toString());
 	}
 }

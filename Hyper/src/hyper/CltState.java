@@ -12,9 +12,6 @@ class CltState extends State
 	// Socket connected to INN
 	SocketChannel innChan;
 
-	// Socket connected to ANN
-	SocketChannel annChan;
-
 	// Sockets connected from potential neighbors
 	ArrayList<SocketChannel> nbrChans = new ArrayList<>();
 

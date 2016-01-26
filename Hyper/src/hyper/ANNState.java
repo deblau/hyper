@@ -14,8 +14,8 @@ class ANNState extends State
 	// Proposed peer address
 	CubeAddress peerAddr = null;
 
-	// Count of willing nodes
-	int willing = 0;
+	// Count of successful nodes at each phase
+	int success = 0;
 
 	// List of invalid nodes
 	ArrayList<CubeAddress> invalid = new ArrayList<>();
@@ -31,7 +31,7 @@ class ANNState extends State
 	@Override
 	public String toString()
 	{
-		return "State: " + state + "\nINN, Peer: " + inn + ", " + peerAddr + "\nWilling, Invalid, Nonces: " + willing + ", "
+		return "State: " + state + "\nINN, Peer: " + inn + ", " + peerAddr + "\nWilling, Invalid, Nonces: " + success + ", "
 				+ invalid.toString() + ", " + nonces.toString();
 	}
 }

@@ -254,7 +254,7 @@ public class MessageListener extends Thread
 	}
 
 	/**
-	 * Called by {@link CubeProtocol} when establishing a new {@link Neighbor}.
+	 * Called by {@link CubeProtocol} when establishing a new neighbor.
 	 */
 	void register(SocketChannel chan) throws IOException
 	{
