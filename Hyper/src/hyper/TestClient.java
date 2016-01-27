@@ -70,7 +70,7 @@ public class TestClient
 
 		// Fake a failure of client #2
 		client2.protocol.shutdown();
-		
+
 		// Retest broadcast
 		client0.protocol.broadcast(new Message(CubeAddress.INVALID_ADDRESS, "uh oh guys, one of the nodes went down"));
 	}
