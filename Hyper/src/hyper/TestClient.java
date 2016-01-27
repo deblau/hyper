@@ -29,6 +29,11 @@ public class TestClient
 	{
 		return protocol.recv();
 	}
+	
+	private Message recvNow() throws CubeException
+	{
+		return protocol.recvNow();
+	}
 
 	public static void main(String[] args) throws CubeException
 	{
@@ -48,7 +53,7 @@ public class TestClient
 		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper
 		client2.send(new CubeAddress("0"), "Data for Node 0");
 		client2.send(new CubeAddress("1"), "Data for Node 1");
-		Message msg = client1.recv();
+		Message msg = client1.recvNow();
 		System.err.println("Node 1 got \"" + msg.data + "\" from Node " + msg.peer);
 
 		// Third client, will get CubeAddress 3 OR 2, whichever is available
