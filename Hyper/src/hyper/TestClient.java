@@ -46,9 +46,9 @@ public class TestClient
 		client2.request_join(node0port);
 
 		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper
-		Message msg = client1.recv();
 		client2.send(new CubeAddress("0"), "Data for Node 0");
 		client2.send(new CubeAddress("1"), "Data for Node 1");
+		Message msg = client1.recv();
 		System.err.println("Node 1 got \"" + msg.data + "\" from Node " + msg.peer);
 
 		// Third client, will get CubeAddress 3 OR 2, whichever is available

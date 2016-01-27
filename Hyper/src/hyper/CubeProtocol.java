@@ -244,6 +244,7 @@ public class CubeProtocol
 	private ArrayList<CubeMessage.Type> phase2ANNstates = new ArrayList<>();
 	private ArrayList<CubeMessage.Type> phase3ANNstates = new ArrayList<>();
 	private ArrayList<CubeMessage.Type> phase4ANNstates = new ArrayList<>();
+	private ArrayList<CubeMessage.Type> phase5ANNstates = new ArrayList<>();
 
 	// NBR states
 	private HashMap<InetSocketAddress, NbrState> nbrStates = new HashMap<>();
@@ -289,6 +290,7 @@ public class CubeProtocol
 		phase4CLTstates.add(CubeMessage.Type.CONN_EXT_ANN_ACK);
 		phase4CLTstates.add(CubeMessage.Type.CONN_EXT_NBR_ACK);
 
+		phase5ANNstates.add(CubeMessage.Type.CONN_ANN_NBR_ADV); // FIXME
 		phase5CLTstates.add(CubeMessage.Type.CONN_EXT_NBR_ACK);
 	}
 
@@ -1021,7 +1023,7 @@ public class CubeProtocol
 	private void conn_nbr_ann_success(CubeMessage msg)
 	{
 		// Validate the message
-		InetSocketAddress addr = validateMsg(msg, annStates, phase4ANNstates);
+		InetSocketAddress addr = validateMsg(msg, annStates, phase5ANNstates);
 		if (null == addr)
 			return;
 		ANNState annState = annStates.get(addr);
