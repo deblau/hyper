@@ -20,6 +20,9 @@ class INNState extends State
 
 	// List of unwilling nodes
 	ArrayList<CubeAddress> unwilling = new ArrayList<>();
+	
+	// ANN for which negotiation is currently handed off
+	CubeAddress ann = null;
 
 	// Phase 1 hop count of the INN
 	int hops = 1;
