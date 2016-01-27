@@ -9,18 +9,15 @@ import java.util.ArrayList;
  */
 class CltState extends State
 {
-	// Socket connected to INN
+	// SocketChannel connected to INN
 	SocketChannel innChan;
-
-	// Sockets connected from potential neighbors
-	ArrayList<SocketChannel> nbrChans = new ArrayList<>();
-
+	
 	// Nonces to use when connecting
 	public ArrayList<Integer> nonces;
 
 	@Override
 	public String toString()
 	{
-		return "State: " + state + "\nNeighbors: " + nbrChans.toString() + "\nNonces: " + nonces;
+		return "State: " + state + "\nNonces: " + nonces;
 	}
 }

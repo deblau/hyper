@@ -34,16 +34,14 @@ class CubeState
 		return !BigInteger.ZERO.setBit(dim).subtract(BigInteger.ONE).equals((BigInteger) links);
 	}
 
-	// Add a neighbor
+	// Add a neighbor; should only be called in Phase 5, since it affects message routing
 	void addNeighbor(int link, SocketChannel chan)
 	{
 		// Increase the Cube dimension, if necessary. Remember that link is 0-based, while dim is 1-based
 		if (link + 1 > dim)
-		{
 			dim = link + 1;
-			neighbors.setSize(dim);
-		}
-		
+		neighbors.setSize(dim);
+
 		// Add the neighbor, and update links
 		neighbors.set(link, chan);
 		links = new CubeAddress(links.setBit(link).toString());

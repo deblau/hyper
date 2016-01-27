@@ -13,12 +13,18 @@ class ANNState extends State
 
 	// Proposed peer address
 	CubeAddress peerAddr = null;
+	
+	// Is this proposal an expanding join?
+	boolean isExpanding = false;
 
-	// Count of successful nodes at each phase
+	// Count of successful nodes at each phase; initialized to 1 in the Phase 3 => 4 transition
 	int success = 0;
 
 	// List of invalid nodes
 	ArrayList<CubeAddress> invalid = new ArrayList<>();
+	
+	// List of unwilling nodes
+	ArrayList<CubeAddress> unwilling = new ArrayList<>();
 
 	// List of nonces from all neighbors (including me)
 	ArrayList<Integer> nonces = new ArrayList<>();

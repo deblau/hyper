@@ -388,7 +388,7 @@ class CubeMessage implements Serializable
 	{
 		// dst is null when a user calls broadcast(); it's not null when we're being tricky under the hood
 		if (null != dst)
-			dst = (CubeAddress) dst.add(BigInteger.ONE);
+			dst = new CubeAddress(dst.add(BigInteger.ONE).toString());
 	}
 
 	public Type getType()
