@@ -10,9 +10,21 @@ import java.math.BigInteger;
 public class CubeAddress extends BigInteger
 {
 	private static final long serialVersionUID = 1205974176746394843L;
-	public static final CubeAddress ZERO = new CubeAddress("0");
-	public static final CubeAddress INVALID_ADDRESS = null;
-	static final CubeAddress ZERO_HOPS = new CubeAddress("-1");
+
+	// An invalid address, used to ensure proper message format
+	public static final CubeAddress INVALID_ADDRESS = new CubeAddress("-1");
+
+	/*
+	 * The "forwarding broadcast" address, indicating that the message should only be processed if the "travel" vector
+	 * is all zeroes (that is, if it cannot be further forwarded)
+	 */
+	static final CubeAddress BCAST_FORWARD = new CubeAddress("-2");
+
+	/*
+	 * The "processing broadcast" address, indicating that the message should be forwarded using the "travel" vector (if
+	 * possible) AND processed by the local node
+	 */
+	static final CubeAddress BCAST_PROCESS = new CubeAddress("-3");
 
 	CubeAddress(String arg0) {
 		super(arg0);

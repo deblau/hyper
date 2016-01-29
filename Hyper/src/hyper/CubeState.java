@@ -13,14 +13,13 @@ class CubeState
 	int dim = 0;
 
 	// My CubeAddress
-	CubeAddress addr = CubeAddress.ZERO;
+	CubeAddress addr = new CubeAddress("0");
 
 	// My connected neighbor nodes
 	Vector<SocketChannel> neighbors = new Vector<>();
 
-	// Bitmap of which nodes are connected; this is used by the broadcast algorithm, and must be a new Object since
-	// BigInteger.ZERO is final
-	CubeAddress links = new CubeAddress("0");
+	// Bitmap of which nodes are connected; this is used by the broadcast algorithm
+	BigInteger links = new CubeAddress("0");
 
 	@Override
 	public String toString()

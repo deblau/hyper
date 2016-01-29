@@ -1,6 +1,10 @@
 package hyper;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -269,6 +273,9 @@ class CubeMessage implements Serializable
 	// Path information used for route requests and broadcasts; see Katseff
 	private BigInteger travel;
 
+	// Hop count
+	private int hopcount;
+
 	// Type of message
 	private Type type = Type.INVALID_MSG;
 
@@ -285,7 +292,7 @@ class CubeMessage implements Serializable
 	}
 
 	/*
-	 * For sending regular messages when the source and destination already have Cube addresses
+	 * Non-broadcast message constructor
 	 */
 	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data) {
 		this.src = src;
@@ -294,12 +301,16 @@ class CubeMessage implements Serializable
 		this.data = data;
 	}
 
-	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim) {
+	/*
+	 * Broadcast message constructor
+	 */
+	CubeMessage(CubeAddress src, CubeAddress dst, Type type, Serializable data, int dim, int hopcount) {
 		this.src = src;
 		this.dst = dst;
 		this.type = type;
 		this.data = data;
 		this.travel = BigInteger.ZERO.setBit(dim).subtract(BigInteger.ONE);
+		this.hopcount = hopcount;
 	}
 
 	/**
@@ -332,14 +343,16 @@ class CubeMessage implements Serializable
 	}
 
 	/**
-	 * Receive a message from a {@link SocketChannel}. Should be called only by the {@link MessageListener}.
+	 * Receive a message from a {@link SocketChannel}. Should be called only by the {@link MessageListener}. This passes
+	 * along any IOExceptions for processing by the <code>MessageListener</code>, which has programmatic access to the
+	 * corresponding {@link CubeProtocol}.
 	 * 
 	 * @param chan
 	 *            The {@link SocketChannel}
 	 * @return a received {@link CubeMessage}, or <code>null</code> if unsuccessful
 	 * @throws IOException
 	 */
-	static CubeMessage recv(SocketChannel chan)
+	static CubeMessage recv(SocketChannel chan) throws IOException
 	{
 		try
 		{
@@ -347,9 +360,6 @@ class CubeMessage implements Serializable
 			msg.channel = chan;
 			return msg;
 		} catch (ClassNotFoundException e)
-		{
-			return null;
-		} catch (IOException e)
 		{
 			return null;
 		}
@@ -365,12 +375,6 @@ class CubeMessage implements Serializable
 		return dst;
 	}
 
-	// Called by CubeProtocol to implement Phase 1 using custom hop count
-	void setDst(CubeAddress dst)
-	{
-		this.dst = dst;
-	}
-
 	// Called by CubeProtocol to implement broadcast
 	BigInteger getTravel()
 	{
@@ -384,11 +388,15 @@ class CubeMessage implements Serializable
 	}
 
 	// Called by CubeProtocol to implement broadcast
-	void reduceHops()
+	int getHopcount()
 	{
-		// dst is null when a user calls broadcast(); it's not null when we're being tricky under the hood
-		if (null != dst)
-			dst = new CubeAddress(dst.add(BigInteger.ONE).toString());
+		return hopcount;
+	}
+
+	// Called by CubeProtocol to implement broadcast
+	void reduceHopcount()
+	{
+		--hopcount;
 	}
 
 	public Type getType()

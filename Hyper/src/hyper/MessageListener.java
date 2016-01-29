@@ -138,34 +138,6 @@ public class MessageListener extends Thread
 	}
 
 	/**
-	 * Remove stale accepted connections.
-	 * 
-	 * @return how long the main select() call should wait
-	 * @throws IOException
-	 *             if there was an error closing a stale connection
-	 */
-	// private long removeStales() throws IOException
-	// {
-	// while (true)
-	// {
-	// // If we have no active connections, wait indefinitely
-	// if (timeoutMap.isEmpty())
-	// return 0;
-	//
-	// // Calculate whether the earliest connection is still fresh
-	// long timestamp = timeoutMap.firstKey();
-	// long wait = timestamp - System.currentTimeMillis();
-	// if (wait > 0)
-	// return wait;
-	//
-	// // The earliest connection is stale. Remove and close it, then repeat.
-	// SocketChannel sc = timeoutMap.remove(timestamp);
-	// sc.keyFor(sel).cancel();
-	// sc.close();
-	// }
-	// }
-
-	/**
 	 * Process selected keys.
 	 * 
 	 * @throws IOException
@@ -227,7 +199,8 @@ public class MessageListener extends Thread
 						}
 					} catch (Exception e)
 					{
-						e.printStackTrace();
+						// Peer closed connection
+						protocol.closedCxn(chan);
 						chan.close();
 					}
 				} else
