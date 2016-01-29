@@ -4,72 +4,52 @@ import java.net.InetSocketAddress;
 
 public class TestClient
 {
-	private CubeProtocol protocol;
-
-	public TestClient(int port) {
-		MessageListener listener = new MessageListener(new InetSocketAddress(port), false);
+	private CubeProtocol startClient(InetSocketAddress addr)
+	{
+		MessageListener listener = new MessageListener(addr, false);
 		listener.start();
-		protocol = new CubeProtocol(listener);
-	}
-
-	public void request_join(int port) throws CubeException
-	{
-		// Assume the INN is running locally
-		protocol.connect(new InetSocketAddress(port));
-	}
-
-	private boolean send(CubeAddress addr, String data)
-	{
-		CubeState state = protocol.getCubeState();
-		return protocol.unicastSend(new CubeMessage(state.addr, addr, CubeMessage.Type.DATA_MSG, data));
-	}
-
-	private Message recv() throws CubeException
-	{
-		return protocol.recv();
-	}
-
-	private Message recvNow() throws CubeException
-	{
-		return protocol.recvNow();
+		return new CubeProtocol(listener);
 	}
 
 	public static void main(String[] args) throws CubeException
 	{
-		int node0port = 20000;
+		int port = 20000;
+		InetSocketAddress inn = new InetSocketAddress(port);
+		TestClient tc = new TestClient();
 
 		// Set up initial node, will get CubeAddress 0
-		TestClient client0 = new TestClient(node0port);
+		CubeProtocol client0 = tc.startClient(inn);
 
 		// First client, will get CubeAddress 1
-		TestClient client1 = new TestClient(node0port + 1000);
-		client1.request_join(node0port);
+		CubeProtocol client1 = tc.startClient(new InetSocketAddress(++port));
+		client1.connect(inn);
 
 		// Second client, will get CubeAddress 2 OR 3, depending on a coin flip
-		TestClient client2 = new TestClient(node0port + 2000);
-		client2.request_join(node0port);
+		CubeProtocol client2 = tc.startClient(new InetSocketAddress(++port));
+		client2.connect(inn);
 
 		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper
-		client2.send(new CubeAddress("0"), "Data for Node 0");
-		client2.send(new CubeAddress("1"), "Data for Node 1");
-		Message msg = client1.recv();
+		client2.send(new Message(new CubeAddress("0"), "Data for Node 0"));
+		client2.send(new Message(new CubeAddress("1"), "Data for Node 1"));
+		System.out.println(client1.recv());
 
 		// Third client, will get CubeAddress 3 OR 2, whichever is available
-		TestClient client3 = new TestClient(node0port + 3000);
-		client3.request_join(node0port);
+		CubeProtocol client3 = tc.startClient(new InetSocketAddress(++port));
+		client3.connect(inn);
 
-		// Test message passing in both directions.
-		client3.send(new CubeAddress("0"), "Data for Node 0");
-		client3.send(new CubeAddress("1"), "Data for Node 1");
-		client3.send(new CubeAddress("2"), "Data for Node 2");
+		// Test message passing in both link directions
+		client3.send(new Message(new CubeAddress("0"), "Data for Node 0"));
+		client3.send(new Message(new CubeAddress("1"), "Data for Node 1"));
+		client3.send(new Message(new CubeAddress("2"), "Data for Node 2"));
 
 		// Test broadcast
-		client0.protocol.broadcast("this is a test");
+		client0.broadcast("this is a test");
 
 		// Fake a failure of client #2
-		client2.protocol.shutdown();
+		client1.shutdown();
 
 		// Retest broadcast
-		client0.protocol.broadcast("uh oh guys, one of the nodes went down");
+		client0.broadcast("uh oh guys, my neighbor went down");
+		System.exit(0);
 	}
 }

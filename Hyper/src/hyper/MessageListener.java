@@ -166,7 +166,6 @@ public class MessageListener extends Thread
 				sel.selectedKeys().remove(key);
 				if (key.isAcceptable())
 				{
-					System.err.println(Thread.currentThread() + " accepting");
 					// If someone tries to connect, accept and wait for them to contact us
 					SocketChannel chan = ((ServerSocketChannel) key.channel()).accept();
 					if (null != chan)
@@ -197,7 +196,7 @@ public class MessageListener extends Thread
 							// Now (finally!) we can process the message
 							protocol.process(msg);
 						}
-					} catch (Exception e)
+					} catch (IOException e)
 					{
 						// Peer closed connection
 						protocol.closedCxn(chan);

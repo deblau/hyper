@@ -293,14 +293,18 @@ public class CubeProtocol
 
 	// Local message queuing
 	private ArrayList<CubeMessage> queued = new ArrayList<>();
-	Thread blockingThread = null;
 
+	// Our monitor object, used so we don't return from connect() or recv() too soon
+	boolean blocking = false;
+	Thread blockingThread = null; // Only necessary for testing
+
+	// Accessor
 	CubeState getCubeState()
 	{
 		return cubeState;
 	}
 
-	public CubeProtocol(MessageListener listener) {
+	CubeProtocol(MessageListener listener) {
 		this.listener = listener;
 		listener.setProtocol(this);
 	}
@@ -344,7 +348,7 @@ public class CubeProtocol
 				return true;
 
 			// Forward the message, ignoring the return value
-			fwd_broadcast(msg);
+			bcastSend(msg);
 
 			// Return based on whether we should (also) process the message
 			return dst.equals(CubeAddress.BCAST_PROCESS);
@@ -1296,6 +1300,14 @@ public class CubeProtocol
 		quietClose(cltState.innChan);
 		cubeState.addNeighbor(cubeState.addr.relativeLink(msg.getSrc()), msg.getChannel());
 		cubeState.dim = dim; // Must come after addNeighbor()!
+
+		// Wake up the connecting application
+		if (null != blockingThread)
+			synchronized (blockingThread)
+			{
+				blocking = false;
+				blockingThread.notify();
+			}
 	}
 
 	/**
@@ -1390,8 +1402,17 @@ public class CubeProtocol
 		// Update the Cube state
 		cubeState.addNeighbor(link, chan);
 		if (cubeState.links.bitCount() == cltState.nonces.size())
+		{
 			// We are fully connected
 			cltState = null;
+			if (null != blockingThread)
+				synchronized (blockingThread)
+				{
+					blocking = false;
+					blockingThread.notify();
+					blockingThread = null;
+				}
+		}
 	}
 
 	/**
@@ -1737,10 +1758,14 @@ public class CubeProtocol
 		// Process based on our type
 		if (origType == Type.DATA_MSG)
 		{
-			// Queue an "invalid" message
-			queued.add(new CubeMessage(msg.getSrc(), msg.getDst(), Type.INVALID_MSG, data));
-			if (null != blockingThread)
-				blockingThread.notify();
+			// Queue an "invalid" message -- only the source address and data will be visible to applications
+			queued.add(new CubeMessage(CubeAddress.INVALID_ADDRESS, msg.getDst(), Type.INVALID_MSG, msg.getSrc()));
+			if (blocking)
+				synchronized (blockingThread)
+				{
+					blocking = false;
+					blockingThread.notify();
+				}
 		}
 
 		// Otherwise, we choked during the connection protocol
@@ -1815,8 +1840,12 @@ public class CubeProtocol
 
 		// Add this message to my queue
 		queued.add(msg);
-		if (null != blockingThread)
-			blockingThread.notify();
+		if (blocking)
+			synchronized (blockingThread)
+			{
+				blocking = false;
+				blockingThread.notify();
+			}
 	}
 
 	private void node_shutdown(CubeMessage msg)
@@ -1825,16 +1854,59 @@ public class CubeProtocol
 
 	}
 
+	/**
+	 * Clean up state when a peer closes its connection to us. The primary function is to update the neighbors and
+	 * links.
+	 * 
+	 * @param chan
+	 */
+	void closedCxn(SocketChannel chan)
+	{
+		// Locate the channel that went down
+		int link = cubeState.neighbors.indexOf(chan);
+		if (-1 == link)
+		{
+			// FIXME
+			/*
+			 * There is a race condition where the thread sending a message is interrupted by the thread scheduler
+			 * before dumping its entire CubeMessage onto the SocketChannel. This will result in a short read in
+			 * CubeMessage.recv(), which brings us to this method, even though the channel is still open. If this race
+			 * occurs during the Cube connection process, "chan" won't yet be in cubeState.neighbors, and we'll end up
+			 * here. This can be fixed by going to a more robust wire protocol.
+			 */
+			return;
+		}
+
+		// Clean up state
+		cubeState.neighbors.set(link, null);
+		cubeState.links = cubeState.links.clearBit(link);
+		neighborDisconnected(link);
+	}
+
 	/*
 	 * Protected and public methods
 	 */
 
 	/**
 	 * Determine whether I am willing to allow a connection from a given address.
+	 * 
+	 * @param addr
+	 *            The {@link InetSocketAddress} of the peer that wishes to connect
+	 * @return Whether I am willing to permit the connection
 	 */
 	protected boolean amWilling(InetSocketAddress addr)
 	{
 		return true;
+	}
+
+	/**
+	 * Take an action when I receive an indication that a neighbor disconnected.
+	 * 
+	 * @param link
+	 *            The link number of the disconnected neighbor
+	 */
+	protected void neighborDisconnected(int link)
+	{
 	}
 
 	/**
@@ -1844,7 +1916,7 @@ public class CubeProtocol
 	 * @param innAddr
 	 *            The address of an INN
 	 * @throws CubeException
-	 *             if either argument is <code>null</code>, or if a connection to the INN cannot be established
+	 *             if the argument is <code>null</code>, or if a connection to the INN cannot be established
 	 */
 	public void connect(InetSocketAddress innAddr) throws CubeException
 	{
@@ -1873,6 +1945,31 @@ public class CubeProtocol
 		{
 			throw new CubeException("connect() unable to register the connection to " + innAddr);
 		}
+
+		// Wait until we're done connecting to return
+		blocking = true;
+		blockingThread = Thread.currentThread();
+		synchronized (blockingThread)
+		{
+			while (blocking)
+				try
+				{
+					blockingThread.wait();
+				} catch (InterruptedException e)
+				{
+				}
+		}
+		blockingThread = null;
+	}
+
+	/**
+	 * Obtain the dimension of the Cube.
+	 * 
+	 * @return The dimension
+	 */
+	public int getDimension()
+	{
+		return cubeState.dim;
 	}
 
 	/**
@@ -1880,20 +1977,44 @@ public class CubeProtocol
 	 * 
 	 * @return The <code>CubeAddress</code>
 	 */
-	public final CubeAddress getAddress()
+	public CubeAddress getCubeAddress()
 	{
 		return cubeState.addr;
 	}
 
 	/**
-	 * Send a {@link Message} to another node in the Cube. This method will return <code>true</code> when the
-	 * <code>Message</code> was accepted by the Cube for delivery, not when it was actually accepted by the other node.
-	 * If the {@link CubeAddress} of the <code>Message</code> refers to a non-connected node, the Cube will return a
-	 * <code>Message</code>
+	 * Obtain the {@link InetSocketAddress} of each directly connected Cube node.
+	 * 
+	 * @return A {@link Vector} of the addresses
+	 */
+	public Vector<InetSocketAddress> getNeighbors()
+	{
+		Vector<InetSocketAddress> ret = new Vector<>();
+		for (SocketChannel chan : cubeState.neighbors)
+			try
+			{
+				ret.addElement((InetSocketAddress) chan.getRemoteAddress());
+			} catch (IOException e)
+			{
+			}
+		return ret;
+	}
+
+	/**
+	 * <p>
+	 * Send a {@link Message} to another node in the Cube, without blocking. Note that delivery of messages to other
+	 * Cube nodes is not guaranteed by the Cube protocol itself.
+	 * </p>
+	 * <p>
+	 * This method will return <code>true</code> when the <code>Message</code> was accepted by the Cube for delivery. If
+	 * the {@link CubeAddress} of the <code>Message</code> refers to a non-connected node, the Cube will return a
+	 * <code>Message</code> having its <code>peer</code> field set to {@link CubeAddress.INVALID_ADDRESS} and its
+	 * <code>data</code> field set to the address of the non-connected node.
+	 * </p>
 	 * 
 	 * @param msg
 	 *            The <code>Message</code> to send
-	 * @return whether the <code>Message</code> was sent into the node
+	 * @return whether the <code>Message</code> was sent asynchronously into the Cube
 	 * @throws CubeException
 	 *             if the <code>Message</code> does not specify a proper {@link CubeAddress}
 	 */
@@ -1914,9 +2035,10 @@ public class CubeProtocol
 	/*
 	 * Send a message through the Cube using Katseff Algorithm 3 (with LSB instead of MSB ordering). Invoking this
 	 * method cannot divulge confidential address information to a non-connected node; at worst, using this method as a
-	 * response to a forged request will send a message to another connected node, which will reply with INVALID_STATE.
+	 * response to a forged request will send a bogus message to another connected node, which will reply with
+	 * INVALID_STATE.
 	 */
-	boolean unicastSend(CubeMessage msg)
+	private boolean unicastSend(CubeMessage msg)
 	{
 		// Check for idiocy and/or forged messages
 		if (msg.getDst().bitLength() > cubeState.dim)
@@ -1947,19 +2069,43 @@ public class CubeProtocol
 	}
 
 	// Reply to a message with a new message type and data
-	void reply(CubeMessage request, Type type, Serializable data)
+	private void reply(CubeMessage request, Type type, Serializable data)
 	{
 		unicastSend(new CubeMessage(cubeState.addr, request.getSrc(), type, data));
 	}
 
 	/**
-	 * Broadcast a {@link Message} through the Cube.
+	 * Convenience method for replying to a received {@link Message}.
+	 * 
+	 * @param msg
+	 *            The received <code>Message</code>
+	 * @param data
+	 *            The {@link Serializable} response
+	 * @throws CubeException
+	 *             if the <code>Message</code> does not specify a proper {@link CubeAddress}
+	 */
+	public void reply(Message msg, Serializable data) throws CubeException
+	{
+		// Check for idiocy
+		if (null == cubeState)
+			throw new CubeException("reply() called on unconnected Cube");
+		if (null == msg.peer)
+			throw new CubeException("reply() called with null peer CubeAddress");
+		if (BigInteger.ZERO.compareTo(msg.peer) > 0)
+			throw new CubeException("reply() called with invalid (negative) peer CubeAddress");
+
+		unicastSend(new CubeMessage(cubeState.addr, msg.peer, Type.DATA_MSG, data));
+	}
+
+	/**
+	 * Broadcasts {@link Serializable} data through the Cube. This function is efficient, in that each Cube node
+	 * receives a copy of the data exactly once.
 	 * 
 	 * @param data
 	 *            A {@link Serializable} object to broadcast
 	 * @return Whether the broadcast message was successfully broadcast
 	 * @throws CubeException
-	 *             if no Cube is connected or if a destination address is provided
+	 *             if no Cube is connected
 	 */
 	public boolean broadcast(Serializable data) throws CubeException
 	{
@@ -1968,12 +2114,14 @@ public class CubeProtocol
 
 		CubeMessage bcastMsg = new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, Type.DATA_MSG, data,
 				cubeState.dim, cubeState.dim);
-		return fwd_broadcast(bcastMsg);
+		return bcastSend(bcastMsg);
 	}
 
-	// Utility method that forwards a broadcast message through the Cube using Katseff Algorithm 6. Returns whether the
-	// message was forwarded successfully
-	private boolean fwd_broadcast(CubeMessage msg)
+	/*
+	 * Forward a broadcast message through the Cube using Katseff Algorithm 6. Returns whether the message was forwarded
+	 * successfully (which should always be true, since we gracefully handle neighbor SocketChannel closures).
+	 */
+	private boolean bcastSend(CubeMessage msg)
 	{
 		// Initial message validation
 		BigInteger travel = msg.getTravel();
@@ -2055,25 +2203,23 @@ public class CubeProtocol
 		}
 
 		/*
-		 * Spin until a message is received. Note that this method is called by a client application, not the
+		 * Wait until a message is received. Note that this method is called by a client application, not the
 		 * MessageListener, so it won't block the protocol
 		 */
-		while (null == msg)
-			try
+		blocking = true;
+		blockingThread = Thread.currentThread();
+		while (blocking)
+			synchronized (blockingThread)
 			{
-				
-				// FIXME
-				blockingThread = Thread.currentThread();
-				blockingThread.wait();
-			} catch (InterruptedException e)
-			{
-				if (available())
+				try
 				{
-					msg = queued.remove(0);
-					blockingThread = null;
-					break;
+					blockingThread.wait();
+				} catch (InterruptedException e)
+				{
 				}
 			}
+		blockingThread = null;
+		msg = queued.remove(0);
 		return new Message(msg.getSrc(), msg.getData());
 	}
 
@@ -2085,27 +2231,5 @@ public class CubeProtocol
 	{
 		// Terminate neighbor connections
 		listener.shutdown();
-	}
-
-	/**
-	 * Clean up state when a peer closes its connection to us. The primary function is to update the neighbors and
-	 * links.
-	 * 
-	 * @param chan
-	 */
-	void closedCxn(SocketChannel chan)
-	{
-		// Locate the channel that went down
-		int link = cubeState.neighbors.indexOf(chan);
-		if (-1 == link)
-		{
-			// Well, this shouldn't happen...
-			System.err.println("CubeProtocol.closedCxn() called with bad SocketChannel!");
-			return;
-		}
-
-		// Clean up state
-		cubeState.neighbors.set(link, null);
-		cubeState.links = cubeState.links.clearBit(link);
 	}
 }

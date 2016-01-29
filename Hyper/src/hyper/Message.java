@@ -31,4 +31,10 @@ public class Message
 		this.peer = peer;
 		this.data = data;
 	}
+
+	@Override
+	public String toString()
+	{
+		return "Peer: " + peer + ", data: " + data;
+	}
 }
