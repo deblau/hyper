@@ -198,7 +198,9 @@ public class MessageListener extends Thread
 						}
 					} catch (IOException e)
 					{
-						// Peer closed connection
+						// Peer may have closed connection
+						if(chan.isOpen())
+							break;
 						protocol.closedCxn(chan);
 						chan.close();
 					}
