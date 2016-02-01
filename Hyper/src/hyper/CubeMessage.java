@@ -1,5 +1,6 @@
 package hyper;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -7,7 +8,6 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -271,7 +271,7 @@ class CubeMessage implements Serializable
 	private CubeAddress dst = CubeAddress.INVALID_ADDRESS;
 
 	// Path information used for route requests and broadcasts; see Katseff
-	private BigInteger travel;
+	private BigInteger travel = new BigInteger("-1");
 
 	// Hop count
 	private int hopcount;
@@ -328,13 +328,23 @@ class CubeMessage implements Serializable
 		 */
 		try
 		{
+			// First, write ourselves onto a ByteArrayOutputStream (except for our channel, which is purely local)
 			ByteArrayOutputStream baos = new ByteArrayOutputStream();
-			SocketChannel saved = channel;
+			SocketChannel ch = channel;
 			channel = null;
 			new ObjectOutputStream(baos).writeObject(this);
-			channel = saved;
-			ByteBuffer buf = ByteBuffer.wrap(baos.toByteArray());
-			chan.write(buf);
+			channel = ch;
+
+			// Next, determine our size, and write ourselves into a sized ByteBuffer
+			int size = baos.toByteArray().length;
+			ByteBuffer buf = ByteBuffer.allocate(size + 4);
+			buf.putInt(size);
+			buf.put(baos.toByteArray());
+
+			// Finally, write the ByteBuffer to the indicated channel
+			buf.rewind();
+			while (buf.hasRemaining())
+				chan.write(buf);
 			return true;
 		} catch (IOException e)
 		{
@@ -354,9 +364,21 @@ class CubeMessage implements Serializable
 	 */
 	static CubeMessage recv(SocketChannel chan) throws IOException
 	{
+		// First, determine the size of the CubeMessage object
+		ByteBuffer buf = ByteBuffer.allocate(4);
+		chan.read(buf);
+		buf.rewind();
+		int size = buf.getInt();
+
+		// Then, allocate a ByteBuffer and read the CubeMessage
+		buf = ByteBuffer.allocate(size);
+		while (buf.hasRemaining())
+			chan.read(buf);
+
+		// Finally, populate the message
 		try
 		{
-			CubeMessage msg = (CubeMessage) new ObjectInputStream(Channels.newInputStream(chan)).readObject();
+			CubeMessage msg = (CubeMessage) new ObjectInputStream(new ByteArrayInputStream(buf.array())).readObject();
 			msg.channel = chan;
 			return msg;
 		} catch (ClassNotFoundException e)
