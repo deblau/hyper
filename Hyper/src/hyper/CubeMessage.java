@@ -23,58 +23,6 @@ class CubeMessage implements Serializable
 	// Message types
 	public enum Type {
 
-		// Invalid message format
-		// Src: varies
-		// Dest: varies
-		// Data: message type
-		INVALID_MSG,
-
-		// Invalid message data
-		// Src: varies
-		// Dest: varies
-		// Data: varies
-		INVALID_DATA,
-
-		// Invalid protocol state
-		// Src: varies
-		// Dest: varies
-		// Data: [current state, attempted transition state]
-		INVALID_STATE,
-
-		// Invalid Cube address
-		// Src: the invalid address
-		// Dst: the node that sent the message to the invalid address
-		// Data: the original data
-		INVALID_ADDRESS,
-
-		/**
-		 * Messages exchanged during multiple phases
-		 */
-
-		// Message (outside the Cube) from ingress negotiation node (INN) to client (CLT), rejecting a connection
-		// Src: INVALID_ADDRESS
-		// Dest: INVALID_ADDRESS
-		// Data: null (could be extended to include a reason)
-		CONN_INN_EXT_CONN_REFUSED,
-
-		// Message from address negotiation node (ANN) to INN, declaring unsuccessful address negotiation
-		// Src: ANN
-		// Dest: INN
-		// Data: CLT's TCP address
-		CONN_ANN_INN_FAIL,
-
-		// Message from ANN to new neighbor (NBR), declaring unsuccessful address negotiation
-		// Src: ANN
-		// Dest: NBR
-		// Data: CLT's TCP address
-		CONN_ANN_NBR_FAIL,
-
-		// Message from ANN to CLT, declaring unsuccessful address negotiation
-		// Src: INVALID_ADDRESS
-		// Dest: INN
-		// Data: CLT's TCP address
-		CONN_ANN_EXT_FAIL,
-
 		/**
 		 * Messages exchanged during Phase 1: Determining possible attachment point
 		 */
@@ -238,6 +186,58 @@ class CubeMessage implements Serializable
 		// Dest: ANN
 		// Data: CLT's TCP address
 		CONN_INN_GEN_CLEANUP,
+
+		/**
+		 * Failure messages exchanged during multiple phases
+		 */
+
+		// Invalid message format (including source/destination address)
+		// Src: varies
+		// Dest: varies
+		// Data: message type
+		INVALID_MSG,
+
+		// Invalid (i.e., unconnected) Cube address
+		// Src: the invalid address
+		// Dst: the node that sent the message to the invalid address
+		// Data: the original data
+		INVALID_ADDRESS,
+
+		// Invalid protocol state
+		// Src: varies
+		// Dest: varies
+		// Data: Type[] of current state, attempted transition state
+		INVALID_STATE,
+
+		// Invalid message data
+		// Src: varies
+		// Dest: varies
+		// Data: varies
+		INVALID_DATA,
+
+		// Message (outside the Cube) from ingress negotiation node (INN) to client (CLT), rejecting a connection
+		// Src: INVALID_ADDRESS
+		// Dest: INVALID_ADDRESS
+		// Data: null (could be extended to include a reason)
+		CONN_INN_EXT_CONN_REFUSED,
+
+		// Message from address negotiation node (ANN) to INN, declaring unsuccessful address negotiation
+		// Src: ANN
+		// Dest: INN
+		// Data: CLT's TCP address
+		CONN_ANN_INN_FAIL,
+
+		// Message from ANN to new neighbor (NBR), declaring unsuccessful address negotiation
+		// Src: ANN
+		// Dest: NBR
+		// Data: CLT's TCP address
+		CONN_ANN_NBR_FAIL,
+
+		// Message from ANN to CLT, declaring unsuccessful address negotiation
+		// Src: INVALID_ADDRESS
+		// Dest: INN
+		// Data: CLT's TCP address
+		CONN_ANN_EXT_FAIL,
 
 		/**
 		 * Messages exchanged post-connection
