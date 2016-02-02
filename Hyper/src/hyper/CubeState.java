@@ -10,7 +10,7 @@ import java.util.Vector;
 class CubeState
 {
 	// Hypercube dimension
-	int dim = 0;
+	private int dim = 0;
 
 	// My CubeAddress
 	CubeAddress addr = new CubeAddress("0");
@@ -44,5 +44,15 @@ class CubeState
 		// Add the neighbor, and update links
 		neighbors.set(link, chan);
 		links = new CubeAddress(links.setBit(link).toString());
+	}
+
+	int getDim()
+	{
+		return dim;
+	}
+
+	void setDim(int dim)
+	{
+		this.dim = dim;
 	}
 }

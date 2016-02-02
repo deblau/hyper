@@ -13,21 +13,17 @@ class NbrState extends State
 
 	// Address of client
 	CubeAddress addr = null;
-	
+
 	// Connection to client
 	SocketChannel chan = null;
 
-	// Nonce to use when connecting
-	Integer nonce = (int) (Math.random() * Integer.MAX_VALUE);
-
-	public NbrState(CubeAddress ann)
-	{
+	public NbrState(CubeAddress ann) {
 		this.ann = ann;
 	}
 
 	@Override
 	public String toString()
 	{
-		return "State: " + state + "\nANN: " + ann + "\nClient/Nonce: " + addr + ", " + nonce;
+		return "State: " + state + "\nANN: " + ann + "\nClient: " + addr;
 	}
 }

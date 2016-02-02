@@ -1,7 +1,7 @@
 package hyper;
 
+import java.math.BigInteger;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
 
 /**
  * State variables associated with acting as INN. The {@link CubeProtocol} class includes a list of these, one for each
@@ -12,30 +12,22 @@ class INNState extends State
 	// Socket channel for connecting client
 	SocketChannel chan;
 
-	// List of able and willing nodes
-	ArrayList<CubeAddress> acked = new ArrayList<>();
+	// Bitmap of unwilling nodes
+	BigInteger unwilling = BigInteger.ZERO;
 
-	// List of unable nodes
-	ArrayList<CubeAddress> unable = new ArrayList<>();
-
-	// List of unwilling nodes
-	ArrayList<CubeAddress> unwilling = new ArrayList<>();
+	// Bitmap of willing and able nodes
+	BigInteger able = BigInteger.ZERO;
 	
 	// ANN for which negotiation is currently handed off
 	CubeAddress ann = null;
 
-	// Phase 1 hop count of the INN
-	int hops = 1;
-
-	INNState(SocketChannel chan)
-	{
+	INNState(SocketChannel chan) {
 		this.chan = chan;
 	}
 
 	@Override
 	public String toString()
 	{
-		return "State: " + state + "\nAcked/Unable/Unwilling: " + acked.toString() + ", " + unable.toString() + ", "
-				+ unwilling.toString();
+		return "State: " + state + "\nUnwilling/Able: " + unwilling.toString() + ", " + able.toString();
 	}
 }
