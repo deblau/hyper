@@ -27,7 +27,6 @@ import hyper.CubeMessage.Type;
  * of the Cube protocol is providing an algorithm for solving this problem, thereby showing that the necessary
  * "neighbor mapping" condition is actually sufficient to implement routing.
  * </p>
- * 
  * <p>
  * The key insight is to route messages along a direction that reduces the Hamming distance between the address of the
  * local node (which might be a relay node) and the destination address. This first-pass routing algorithm was developed
@@ -39,7 +38,6 @@ import hyper.CubeMessage.Type;
  * problem was solved by Howard Katseff at AT&T; see Katseff, H., <em>Incomplete Hypercubes</em>, Hypercube
  * Multiprocessors, 1987: Proc. Second Conf. on Hypercube Multiprocessors, pp. 258-264.
  * </p>
- * 
  * <p>
  * If the <em>m</em> nodes in an incomplete hypercube are consecutively numbered from 0 to <em>m-1</em>, then there is
  * an <em>n</em> such that 2<sup><em>n</em></sup> < <em>m</em> < 2<sup><em>n+1</em></sup>. It was noted in Chen, G.-H.
@@ -57,10 +55,9 @@ import hyper.CubeMessage.Type;
  * <h3>Protocol overview</h3>
  * <p>
  * The Cube protocol uses Katseff's Algorithm 3 for routing, and Algorithm 6 for broadcast messaging. Algorithm 6 is
- * also "reversed" for gathering data from all connected nodes; see, for example, Fosdick et al., An Introduction to
- * High-performance Scientific Computing, p. 468 (MIT Press, 1996).
+ * also "reversed" for efficiently gathering data from all connected nodes; see, for example, Fosdick et al., An
+ * Introduction to High-performance Scientific Computing, p. 468 (MIT Press, 1996).
  * </p>
- * 
  * <p>
  * There is one major function provided by the protocol that requires many different types of messages to be passed:
  * connecting new clients to the Cube. The chief concern in this area of the protocol is maintaining the anonymity of
@@ -71,34 +68,30 @@ import hyper.CubeMessage.Type;
  * the revelation of any <code>CubeAddress</code> to a connecting client until the last possible moment, after it has
  * been approved to join the Cube.
  * </p>
- * 
  * <p>
- * The connection process operates in four phases. In the first phase, the INN locates an attachment point for an
- * external client that wishes to join; that is, a previously-connected node that is willing and able to be a neighbor
- * in the Cube address space. This attachment node takes over the remainder of the process as an Address Negotiation
- * Node (ANN). In the second phase, the ANN offers the external client a CubeAddress using a direct connection (i.e.,
- * outside the normal Cube message passing algorithm), without revealing its own Cube address or that of any of the
- * would-be neighbors. In the third phase, the ANN instructs each neighbor to establish an IP connection to the client
- * (again, without revealing its Cube address). In the fourth phase, if all has gone perfectly, the ANN instructs each
- * neighbor to reveal its address to the client outside the normal Cube channels, completing the Cube connection while
- * preventing other nodes from learning of the confidential relationship between {@link InetAddress} and
- * {@link CubeAddress}. If any of Phases 2 through 4 fail, the ANN informs the neighbors and the INN, which resumes the
- * search for a different, working ANN. If no ANN can be found (even after considering expanding the Cube's dimension),
- * the INN informs the client that the connection was denied.
+ * The connection process operates in four phases. In the first phase, the INN locates, for an external client that
+ * wishes to join, a previously-connected node that is willing and able to be a neighbor in the Cube address space. This
+ * node takes over the remainder of the process as an Address Negotiation Node (ANN). In the second phase, the ANN
+ * offers the external client a CubeAddress using a direct connection (i.e., outside the normal Cube message passing
+ * algorithm), without revealing its own Cube address or that of any of the would-be neighbors. In the third phase, the
+ * ANN instructs each neighbor to establish an IP connection to the client (again, without revealing its Cube address).
+ * In the fourth phase, if all has gone perfectly, the ANN instructs each neighbor to reveal its address to the client
+ * outside the normal Cube channels, completing the Cube connection while preventing other nodes from learning of the
+ * confidential relationship between {@link InetAddress} and {@link CubeAddress}. If any of Phases 2 through 4 fail, the
+ * ANN informs the neighbors and the INN, which resumes the search for a different, working ANN. If no ANN can be found
+ * (even after considering expanding the Cube's dimension), the INN informs the client that the connection was denied.
  * </p>
- * 
  * <p>
- * An ANN may only connect the client if the client's prospective neighbors (including the ANN itself) are all willing
- * and able to connect to the new client. Willingness to connect is a potentially serious issue; for example, a node may
- * wish to maintain a blacklist of IP addresses or blocks that are denied connections due to political or network
- * routing efficiency concerns. Therefore, the protocol guarantees that no Cube member shall be required to connect to
- * any client for which it signals an unwillingness to do so (and vice versa). This guarantee is implemented by the INN
- * gathering, from each node in the Cube in Phase 1, an indication of its willingness to connect to the client, then
- * performing a calculation to guarantee that the selected ANN and the other new neighbors are all willing. However,
- * ability to connect (that is, whether a node has a slot for connecting to another node) is an issue of Cube topology,
- * which is easily fixed within the protocol.
+ * An ANN may only connect the client to the Cube if the client's prospective neighbors (including the ANN itself) are
+ * all willing and able to connect to the new client. Willingness to connect is a potentially serious issue; for
+ * example, a node may wish to maintain a blacklist of IP addresses or blocks that are denied connections due to
+ * political or network routing efficiency concerns. Therefore, the protocol guarantees that no Cube member shall be
+ * required to connect to any client for which it signals an unwillingness to do so (and vice versa). This guarantee is
+ * implemented by the INN gathering, from each node in the Cube in Phase 1, an indication of its willingness to connect
+ * to the client, then performing a calculation to guarantee that the selected ANN and all potential new neighbors are
+ * willing. By contrast, ability to connect (that is, whether a node has an unused connection slot, given the Cube's
+ * dimension) is an issue of Cube topology, which is easily fixed within the protocol.
  * </p>
- * 
  * <p>
  * The details of these processes follow. Message types referenced below support the connection state machine, and are
  * found in the {@link CubeMessage.Type} inner class. Messages for protocol connections are named in four parts. The
@@ -112,50 +105,44 @@ import hyper.CubeMessage.Type;
  * 
  * <h4>Phase 1: Locating a possible attachment point</h4>
  * <p>
- * The first phase locates an attachment point for a new node, and is executed by the INN in response to receiving a
+ * In the first phase, the INN locates an attachment point for a connecting client in response to receiving a
  * <code>CONN_EXT_INN_ATTACH</code> message from an external client. The INN broadcasts <code>CONN_INN_GEN_ANN</code>
- * messages to other nodes in the Cube. All other nodes, in turn, return reverse broadcast their availability in a
- * <code>CONN_GEN_INN_AVAIL</code> message as either unwilling (in which case they will be excluded from further
- * consideration) or able because they have a vacancy in their connectivity table. The INN designates a random "able"
- * node as the address negotiating node (ANN), and hands off the remainder of the process to the ANN using a
+ * messages to all other nodes in the Cube. In turn, each node reverse broadcasts in a <code>CONN_GEN_INN_AVAIL</code>
+ * message whether it is willing (in which case it will be excluded from further consideration by the INN). The INN
+ * determines which of the willing nodes nodes have 
+ * designates a random "able" node as the address negotiating node (ANN) using a
  * <code>CONN_INN_ANN_HANDOFF</code> message.
  * </p>
- * 
  * <p>
  * Because address negotiation can fail, the ANN must reply with a success-or-fail status to the INN. If the negotiation
  * of Phases 2 through 4 succeeds as indicated by a <code>CONN_ANN_INN_SUCCESS</code> message, the INN can terminate its
  * participation in the addressing protocol. However if the negotiation fails via a <code>CONN_ANN_INN_FAIL</code>
- * message, the INN continues searching using the ANN cache. If the INN is unable to locate any willing and able ANN,
- * the protocol expands the dimension of the Cube by attaching the new client to the INN itself. (Only the INN can be
- * used here, since a message to any other node instructing attachment would permit computation of the new client's
- * {@link CubeAddress}.) If the INN is unwilling, then the connection fails.
+ * message, the INN continues searching for an ANN. If the INN is unable to locate any willing and able ANN, as a last
+ * resort the protocol expands the dimension of the Cube by attaching the new client to the INN itself. (Only the INN
+ * can be used as attachment point here, since a message to any other node instructing attachment would permit
+ * computation of the new client's {@link CubeAddress} by any node relaying the message.) However, if the INN itself is
+ * unwilling, then the connection fails.
  * </p>
- * 
  * <p>
  * <b>Address security analysis</b>: During Phase 1, the new peer's {@link InetSocketAddress} is passed around, but its
  * {@link CubeAddress} has not been determined. Listening for nodes that accept responsibility as ANN does not reveal a
- * confidential address relationship, since it is not known whether the remaining Phases will be successful, and in any
+ * confidential address relationship, since it is not known whether the remaining phases will be successful, and in any
  * event the accepting ANN might attach the new peer on any of a number of different <code>CubeAddress</code>es, with
  * the uncertainty growing as the Cube's dimension increases.
  * </p>
  * 
  * <h4>Phase 2: Offering a CubeAddress to the client</h4>
  * <p>
- * The ANN notifies the new client of the client's new <code>CubeAddress</code> and the list of nonces from its new
- * neighbors via <code>CONN_ANN_EXT_OFFER</code>. This is done without revealing the ANN's <code>CubeAddress</code>,
- * because the client cannot yet be trusted with that information.
+ * The ANN notifies the new client of its <code>CubeAddress</code> via a <code>CONN_ANN_EXT_OFFER</code> message. This
+ * is done without revealing the ANN's <code>CubeAddress</code>, because the client cannot yet be trusted with that
+ * information. The client may acknowledge the address using a <code>CONN_EXT_ANN_ACCEPT</code> message. If so, the ANN
+ * proceeds to Phase 3. However, if the client replies with <code>CONN_EXT_ANN_DECLINE</code>, the ANN sends a
+ * <code>CONN_ANN_INN_FAIL</code> message to the INN and terminates processing.
  * </p>
- * 
  * <p>
- * The client may acknowledge the address using a <code>CONN_EXT_ANN_ACCEPT</code> message. If so, the ANN proceeds to
- * Phase 3. However, if the client expresses unwillingness to connect to the ANN via <code>CONN_EXT_ANN_DECLINE</code>.
- * In this case, the ANN sends a <code>CONN_ANN_INN_FAIL</code> message to the INN and terminates processing.
- * </p>
- * 
- * <p>
- * <b>Address security analysis</b>: Phase 2 communications within the Cube do not contain the proposed
- * {@link CubeAddress} of the client, and communications outside the Cube do not contain the {@link CubeAddress} of any
- * Cube node.
+ * <b>Address security analysis</b>: Phase 2 communications within the Cube do not contain the {@link CubeAddress} of
+ * the client, only its {@link InetSocketAddress}, while communications outside the Cube do not contain the
+ * {@link CubeAddress} of any Cube node.
  * </p>
  * 
  * <h4>Phase 3: Neighbors all connect without revealing their CubeAddresses</h4>
@@ -163,21 +150,36 @@ import hyper.CubeMessage.Type;
  * Phase 3 begins with the ANN instructing each neighbor to connect to the client via <code>CONN_ANN_NBR_CONNECT</code>.
  * Each neighbor sends to the client, by direct connection outside the node, a <code>CONN_NBR_EXT_OFFER</code> message
  * containing no data. In response, the new client must reply with a <code>CONN_EXT_NBR_ACCEPT</code> message containing
- * its new <code>CubeAddress</code>, or a <code>CONN_EXT_NBR_DECLINE</code> message. Each neighbor verifies that the new
- * <code>CubeAddress</code> is a valid neighbor. The neighbor reports success or failure of the verification to the ANN
- * via <code>CONN_NBR_ANN_CONNECTED</code> and <code>CONN_NBR_ANN_DISCONNECTED</code> messages.
+ * its <code>CubeAddress</code>, or a <code>CONN_EXT_NBR_DECLINE</code> message. Each neighbor verifies that the new
+ * <code>CubeAddress</code> is a valid neighbor. The neighbor reports success or failure of a verified connection to the
+ * ANN via <code>CONN_NBR_ANN_CONNECTED</code> and <code>CONN_NBR_ANN_DISCONNECTED</code> messages, respectively.
  * </p>
- * 
  * <p>
- * If the ANN gets even a single failure, it shuts down the negotiation by sending a <code>CONN_ANN_NBR_FAIL</code>
- * message, informing each of them not to advertise its <code>CubeAddress</code> to the client. The ANN then informs the
- * INN of the failure. However, if all neighbors report success, the connection is assured and the protocol proceeds to
- * the final phase.
+ * If any neighbor returns <code>CONN_NBR_ANN_DISCONNECTED</code>, the ANN sends <code>CONN_ANN_NBR_FAIL</code> to each
+ * neighbor to permit the neighbor to clean up state, then attempts to connect the client at a different
+ * {@link CubeAddress} (and therefore, with different neighbors). If the ANN exhausts all <code>CubeAddress</code>es, it
+ * sends a <code>CONN_ANN_INN_FAIL</code> message to the INN and terminates processing.
  * </p>
- * 
  * <p>
  * <b>Address security analysis</b>: Phase 3 communications within the Cube do not contain the {@link CubeAddress} of
- * the client, and communications outside the Cube do not contain the {@link CubeAddress} of any Cube node.
+ * the client, only its {@link InetSocketAddress}, while communications outside the Cube do not contain the
+ * {@link CubeAddress} of any Cube node.
+ * </p>
+ * <p>
+ * Each node that relays a <code>CONN_ANN_NBR_CONNECT</code> message can compute, with 50% probability, the
+ * <code>CubeAddress</code> of the external client by analyzing the source and destination <code>CubeAddress</code>es
+ * (since the ANN is two hops away from each neighbor). This goes up to 100% probability if the same node relays two
+ * <code>CONN_ANN_NBR_CONNECT</code> messages. Since the ANN must send <code>dim</code>-1 such messages, this latter
+ * condition is guaranteed if the ANN's connectivity is less than <code>dim</code>-1. As an example, consider the 4-Cube
+ * with <code>CubeAddress</code>es 0001, 0010, 0011, 0100, 0101, 1000, 1010, and 1100. A new client that gets
+ * <code>CubeAddress</code> 0000 would be neighbor to four of the existing nodes, any of which could therefore act as
+ * ANN. However, each such possible ANN is connected to only two other nodes (the nodes were chosen to form a closed
+ * cycle).
+ * </p>
+ * <p>
+ * To avoid such a scenario, in Phase 1 the INN ensures that at least one node in the Cube has <code>dim</code>-1
+ * connectivity by "rebalancing" the Cube, if necessary. Rebalancing involves reassigning the <code>CubeAddress</code>
+ * of zero or more nodes to increase connectivity.
  * </p>
  * 
  * <h4>Phase 4: CubeAddress advertisement</h4>
@@ -188,7 +190,6 @@ import hyper.CubeMessage.Type;
  * required from the client. The ANN also transmits <code>CONN_ANN_INN_SUCCESS</code> to the INN, to permit the INN to
  * clean up its own ingress state.
  * </p>
- * 
  * <p>
  * <b>Address security analysis</b>: Phase 4 communications within the Cube do not contain the {@link CubeAddress} of
  * the client. Communications outside the Cube contain the {@link CubeAddress} of each neighbor, which is necessary for
@@ -905,7 +906,7 @@ public class CubeProtocol
 		nbrStates.remove(addr);
 		annStates.remove(addr);
 		unicastSend(new CubeMessage(cubeState.addr, annState.inn, Type.CONN_ANN_INN_SUCCESS, addr));
-		
+
 		// Update the routing information
 		int link = cubeState.addr.relativeLink(annState.peerAddr);
 		cubeState.addNeighbor(link, chan);
@@ -1248,7 +1249,7 @@ public class CubeProtocol
 		nbrStates.remove(addr);
 		annStates.remove(addr);
 		unicastSend(new CubeMessage(cubeState.addr, annState.inn, Type.CONN_ANN_INN_SUCCESS, addr));
-		
+
 		// Update the routing information
 		int link = cubeState.addr.relativeLink(annState.peerAddr);
 		cubeState.addNeighbor(link, chan);
