@@ -803,7 +803,7 @@ public class CubeProtocol
 			return;
 		}
 
-		// Now that Phase 5 is complete, indicate success to everyone and update the routing subsystem
+		// Now that Phase 5 is complete, indicate success to everyone and update the routing information
 		quietClose(innChan);
 		bcastSend(new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, Type.CONN_INN_GEN_CLEANUP, addr));
 		new CubeMessage(cubeState.addr, peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(annChan);
@@ -900,13 +900,15 @@ public class CubeProtocol
 		// Edge case: I'm the only neighbor connected, skip straight to Phase 4
 		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_NBR_EXT_IDENTIFY, null).send(chan);
 		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(chan);
-		int link = cubeState.addr.relativeLink(annState.peerAddr);
-		cubeState.addNeighbor(link, chan);
 
 		// Inform the INN and clean up state
 		nbrStates.remove(addr);
 		annStates.remove(addr);
 		unicastSend(new CubeMessage(cubeState.addr, annState.inn, Type.CONN_ANN_INN_SUCCESS, addr));
+		
+		// Update the routing information
+		int link = cubeState.addr.relativeLink(annState.peerAddr);
+		cubeState.addNeighbor(link, chan);
 	}
 
 	/**
@@ -1169,15 +1171,17 @@ public class CubeProtocol
 			return;
 		}
 
-		// Advertise my CubeAddress and update state
+		// Advertise my CubeAddress
 		nbrState.state = Type.CONN_NBR_EXT_IDENTIFY;
 		new CubeMessage(cubeState.addr, nbrState.addr, nbrState.state, null).send(nbrState.chan);
-		cubeState.addNeighbor(cubeState.addr.relativeLink(nbrState.addr), nbrState.chan);
-		nbrStates.remove(addr);
 
-		// Inform the ANN
+		// Inform the ANN (before updating the routing information)
 		nbrState.state = Type.CONN_NBR_ANN_IDENTIFIED;
 		unicastSend(new CubeMessage(cubeState.addr, nbrState.ann, nbrState.state, addr));
+
+		// Update state
+		nbrStates.remove(addr);
+		cubeState.addNeighbor(cubeState.addr.relativeLink(nbrState.addr), nbrState.chan);
 	}
 
 	/**
@@ -1207,7 +1211,7 @@ public class CubeProtocol
 			return;
 		}
 
-		// Update the Cube routing state
+		// Update the routing information
 		cubeState.addNeighbor(link, chan);
 	}
 
@@ -1239,13 +1243,15 @@ public class CubeProtocol
 		SocketChannel chan = nbrStates.get(addr).chan;
 		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_NBR_EXT_IDENTIFY, null).send(chan);
 		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(chan);
-		int link = cubeState.addr.relativeLink(annState.peerAddr);
-		cubeState.addNeighbor(link, chan);
 
 		// Inform the INN and clean up state
 		nbrStates.remove(addr);
 		annStates.remove(addr);
 		unicastSend(new CubeMessage(cubeState.addr, annState.inn, Type.CONN_ANN_INN_SUCCESS, addr));
+		
+		// Update the routing information
+		int link = cubeState.addr.relativeLink(annState.peerAddr);
+		cubeState.addNeighbor(link, chan);
 	}
 
 	/**
@@ -1299,11 +1305,12 @@ public class CubeProtocol
 		while (!innState.able.equals(BigInteger.ZERO))
 		{
 			int link = innState.able.getLowestSetBit();
-			innState.able.clearBit(link);
+			innState.able = innState.able.clearBit(link);
 			unicastSend(new CubeMessage(cubeState.addr, new CubeAddress(Integer.toString(link)), innState.state, addr));
 		}
 
 		// Clean up my own state
+		annStates.remove(addr);
 		innStates.remove(addr);
 	}
 

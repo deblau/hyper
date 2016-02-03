@@ -23,10 +23,12 @@ public class TestClient
 		// First client, will get CubeAddress 1
 		CubeProtocol client1 = tc.startClient(new InetSocketAddress(++port));
 		client1.connect(inn);
+		System.out.println("client1 connected");
 
 		// Second client, will get CubeAddress 2 OR 3, depending on a coin flip
 		CubeProtocol client2 = tc.startClient(new InetSocketAddress(++port));
 		client2.connect(inn);
+		System.out.println("client2 connected");
 
 		// Test the message passing algorithm. Send data to both 0 and 1, so we show at least one two-hopper
 		client2.send(new Message(new CubeAddress("0"), "Data for Node 0"));
@@ -36,6 +38,7 @@ public class TestClient
 		// Third client, will get CubeAddress 3 OR 2, whichever is available
 		CubeProtocol client3 = tc.startClient(new InetSocketAddress(++port));
 		client3.connect(inn);
+		System.out.println("client3 connected");
 
 		// Test message passing in both link directions
 		client3.send(new Message(new CubeAddress("0"), "Data for Node 0"));
