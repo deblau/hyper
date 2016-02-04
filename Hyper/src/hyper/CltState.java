@@ -14,6 +14,9 @@ class CltState extends State
 	// SocketChannel connected to ANN
 	SocketChannel annChan;
 	
+	// The nonce to communicate to connecting neighbors
+	int nonce;
+	
 	@Override
 	public String toString()
 	{

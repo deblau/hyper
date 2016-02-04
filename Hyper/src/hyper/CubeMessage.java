@@ -30,128 +30,134 @@ class CubeMessage implements Serializable
 		// Message (outside the Cube) from CLT to INN, requesting a CubeAddress
 		// Src: INVALID_ADDRESS
 		// Dest: INVALID_ADDRESS
-		// Data: CLT's TCP address
+		// Data: EXT's TCP address
 		CONN_EXT_INN_ATTACH,
 
 		// Message from INN to other Cube nodes, asking recipients for ability and willingness to accept connection
 		// Src: INN
 		// Dest: BCAST_FORWARD
-		// Data: CLT's TCP address
+		// Data: null
 		CONN_INN_GEN_ANN,
 
-		// Message from generic Cube node to INN, declaring nodes willing and able to accept connection
+		// Message from generic Cube node to INN, declaring existence
 		// Src: BCAST_REVERSE
 		// Dest: INN
-		// Data: CLT's TCP address, bitmap of unwilling nodes
+		// Data: null
 		CONN_GEN_INN_AVAIL,
 
-		// Message from INN to selected address negotiation node (ANN), tentatively handing off negotiation
+		// Message from INN to ANN, requesting cryptography
 		// Src: INN
-		// Dest: Node that responded CONN_GEN_INN_AVAIL
-		// Data: CLT's TCP address
+		// Dest: ANN
+		// Data: An INN cryptographic token
+		CONN_INN_ANN_ENCRYPT,
+
+		// Message from ANN to INN, confirming cryptography
+		// Src: ANN
+		// Dest: INN
+		// Data: The INN token and an ANN token
+		CONN_ANN_INN_ENCRYPT,
+
+		// Message from INN to ANN, tentatively handing off negotiation
+		// Src: INN
+		// Dest: ANN
+		// Data: EXT's TCP address, encrypted using the two tokens
 		CONN_INN_ANN_HANDOFF,
-
+		
 		/**
-		 * Messages exchanged during Phase 2: Offering a CubeAddress to the client
+		 * Messages exchanged during Phase 2: Determining the CubeAddress
 		 */
 
-		// Message (outside the Cube) from ANN to CLT, offering it a new CubeAddress
-		// Src: INVALID_ADDRESS
-		// Dest: offered CubeAddress
-		// Data: the dimension of the Cube and the number of neighbors
-		CONN_ANN_EXT_OFFER,
-
-		// Message (outside the Cube) from CLT to ANN, accepting the offer
-		// Src: accepted CubeAddress
-		// Dest: INVALID_ADDRESS
-		// Data: null
-		CONN_EXT_ANN_ACCEPT,
-
-		// Message (outside the Cube) from CLT to ANN, CLT is unwilling to connect through ANN; ANN must abort
-		// Src: INVALID_ADDRESS
-		// Dest: INVALID_ADDRESS
-		// Data: null
-		CONN_EXT_ANN_DECLINE,
-
-		/**
-		 * Messages exchanged during Phase 3: Neighbors all connect without revealing their CubeAddresses
-		 */
-
-		// Message from ANN to NBR, instructing NBR to connect to CLT
+		// Message from ANN to NBR, requesting cryptography
 		// Src: ANN
 		// Dest: NBR
-		// Data: CLT's TCP address
+		// Data: An ANN cryptographic token
+		CONN_ANN_NBR_ENCRYPT,
+
+		// Message from NBR to ANN, confirming cryptography
+		// Src: NBR
+		// Dest: ANN
+		// Data: The ANN token and a NBR token
+		CONN_NBR_ANN_ENCRYPT,
+
+		// Message from ANN to NBR, requesting willingness to connect
+		// Src: INN
+		// Dest: ANN
+		// Data: EXT's TCP address, encrypted using the two tokens
+		CONN_ANN_NBR_WILLING,
+		
+		// Message from INN to selected address negotiation node (ANN), tentatively handing off negotiation
+		// Src: INN
+		// Dest: ANN
+		// Data: EXT's TCP address, encrypted using the two tokens and true/false
+		CONN_NBR_ANN_WILLING,
+		
+		/**
+		 * Messages exchanged during Phase 3: Establishing IP connections
+		 */
+
+		// Message (outside the Cube) from ANN to EXT, offering it a new CubeAddress
+		// Src: INVALID_ADDRESS
+		// Dest: offered CubeAddress
+		// Data: the dimension of the Cube and a nonce
+		CONN_ANN_EXT_OFFER,
+
+		// Message (outside the Cube) from EXT to ANN, accepting or declining the offer
+		// Src: EXT if accepted; INVALID_ADDRESS if declined
+		// Dest: INVALID_ADDRESS
+		// Data: the nonce
+		CONN_EXT_ANN_REPLY,
+
+		// Message from ANN to NBR, instructing IP connection to EXT
+		// Src: ANN
+		// Dest: NBR
+		// Data: EXT's TCP address encrypted using the two tokens, and the nonce
 		CONN_ANN_NBR_CONNECT,
 
-		// Message (outside the Cube) from NBR to CLT, offering to connect
+		// Message (outside the Cube) from NBR to EXT, offering IP connection
 		// Src: INVALID_ADDRESS
 		// Dest: INVALID_ADDRESS
 		// Data: null
 		CONN_NBR_EXT_OFFER,
 
-		// Message (outside the Cube) from CLT to NBR, accepting the connection
-		// Src: CLT
+		// Message (outside the Cube) from EXT to NBR, accepting or declining the offer
+		// Src: EXT if accepted; INVALID_ADDRESS if declined
 		// Dest: INVALID_ADDRESS
-		// Data: null
-		CONN_EXT_NBR_ACCEPT,
+		// Data: the nonce
+		CONN_EXT_NBR_REPLY,
 
-		// Message (outside the Cube) from CLT to NBR, declining the connection
-		// Src: INVALID_ADDRESS
-		// Dest: INVALID_ADDRESS
-		// Data: null
-		CONN_EXT_NBR_DECLINE,
-
-		// Message from NBR to ANN, indicating connection established
+		// Message from NBR to ANN, notifying ANN of failed connection; ANN must bail
 		// Src: NBR
 		// Dest: ANN
-		// Data: CLT's TCP address
-		CONN_NBR_ANN_CONNECTED,
-
-		// Message from NBR to ANN, indicating failed connection
-		// Src: NBR
-		// Dest: ANN
-		// Data: CLT's TCP address
-		CONN_NBR_ANN_DISCONNECTED,
+		// Data: EXT's TCP address, encrypted using the two tokens
+		CONN_NBR_ANN_DECLINED,
 
 		/**
 		 * Messages exchanged during Phase 4: CubeAddress advertisement
 		 */
 
-		// Message from ANN to NBR, instructing NBR to advertise its Cube address to CLT
+		// Message from NBR to ANN, notifying ANN of an accepted, validated connection
+		// Src: NBR
+		// Dest: ANN
+		// Data: EXT's TCP address, encrypted using the two tokens
+		CONN_NBR_ANN_CONNECTED,
+
+		// Message from ANN to NBR, instructing NBR to advertise its Cube address to EXT
 		// Src: ANN
 		// Dest: NBR
-		// Data: CLT's TCP address
+		// Data: the nonce
 		CONN_ANN_NBR_IDENTIFY,
 
-		// Message (outside the Cube) from NBR to CLT, identifying NBR's Cube address
+		// Message (outside the Cube) from NBR to EXT, identifying NBR's Cube address
 		// Src: NBR
 		// Dest: CLT
 		// Data: null
 		CONN_NBR_EXT_IDENTIFY,
 
-		// Message from NBR to ANN, indicating that the client was informed and state is correct
-		// Src: NBR
-		// Dest: CLT
-		// Data: null
-		CONN_NBR_ANN_IDENTIFIED,
-
-		// Message from ANN to CLT, declaring successful address negotiation
-		// Src: ANN
-		// Dest: CLT
-		// Data: null
-		CONN_ANN_EXT_SUCCESS,
-
 		// Message from ANN to INN, declaring successful address negotiation
 		// Src: ANN
 		// Dest: INN
-		// Data: CLT's TCP address
+		// Data: The INN cryptographic token
 		CONN_ANN_INN_SUCCESS,
-
-		// Message from INN to unable ANNs, declaring successful address negotiation
-		// Src: INN
-		// Dest: ANN
-		// Data: CLT's TCP address
-		CONN_INN_GEN_CLEANUP,
 
 		/**
 		 * Failure messages exchanged during multiple phases
@@ -181,29 +187,23 @@ class CubeMessage implements Serializable
 		// Data: varies
 		INVALID_DATA,
 
-		// Message (outside the Cube) from ingress negotiation node (INN) to client (CLT), rejecting a connection
+		// Message (outside the Cube) from INN to EXT, rejecting a connection
 		// Src: INVALID_ADDRESS
 		// Dest: INVALID_ADDRESS
 		// Data: null (could be extended to include a reason)
 		CONN_INN_EXT_CONN_REFUSED,
 
-		// Message from address negotiation node (ANN) to INN, declaring unsuccessful address negotiation
+		// Message from ANN to INN, declaring unsuccessful address negotiation
 		// Src: ANN
 		// Dest: INN
-		// Data: CLT's TCP address
+		// Data: EXT's TCP address, encrypted using the INN/ANN tokens
 		CONN_ANN_INN_FAIL,
 
-		// Message from ANN to new neighbor (NBR), declaring unsuccessful address negotiation
+		// Message from ANN to NBR, declaring unsuccessful address negotiation
 		// Src: ANN
 		// Dest: NBR
-		// Data: CLT's TCP address
+		// Data: EXT's TCP address, encrypted using the ANN/NBR tokens
 		CONN_ANN_NBR_FAIL,
-
-		// Message from ANN to CLT, declaring unsuccessful address negotiation
-		// Src: INVALID_ADDRESS
-		// Dest: INN
-		// Data: CLT's TCP address
-		CONN_ANN_EXT_FAIL,
 
 		/**
 		 * Messages exchanged post-connection
