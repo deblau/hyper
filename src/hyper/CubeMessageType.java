@@ -12,8 +12,8 @@ enum CubeMessageType {
 	// Message (outside the Cube) from CLT to INN, requesting a CubeAddress
 	// Src: INVALID_ADDRESS
 	// Dest: INVALID_ADDRESS
-	// Peer: null
-	// Data: CLT's unencrypted TCP address
+	// Peer: present and unencrypted
+	// Data: null
 	CONN_EXT_INN_ATTACH,
 
 	// Message from INN to other Cube nodes, asking recipients for ability and willingness to accept connection
