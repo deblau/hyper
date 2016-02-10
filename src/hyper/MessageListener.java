@@ -12,17 +12,17 @@ import java.util.ArrayList;
 public class MessageListener extends Thread
 {
 	// Our bound protocol address
-	private SocketAddress local;
+	private InetSocketAddress local;
 
 	// Our bound SOCKS5 address (if any)
-	private SocketAddress socks = new InetSocketAddress(1080);
+	private InetSocketAddress socks = new InetSocketAddress(1080);
 
 	/**
 	 * Returns the {@link SocketAddress} of the bound listener channel.
 	 * 
 	 * @return the {@link SocketAddress}
 	 */
-	public SocketAddress getAddress()
+	public InetSocketAddress getAddress()
 	{
 		return local;
 	}
@@ -48,7 +48,7 @@ public class MessageListener extends Thread
 	 *            A {@link SocketAddress} to which to bind the server socket, or <code>null</code> for the
 	 *            <code>anyLocal</code> address.
 	 */
-	public MessageListener(SocketAddress local, boolean socks) {
+	public MessageListener(InetSocketAddress local, boolean socks) {
 		try
 		{
 			this.local = local;
