@@ -10,7 +10,7 @@ import java.nio.channels.SocketChannel;
 class CxnState
 {
 	// The current state of the connection, as seen from this node, as given by the last protocol message sent
-	CubeMessage.Type state;
+	CubeMessageType state;
 
 	// SocketChannel between INN and peer -- used by INN and peer
 	SocketChannel innChan = null;
@@ -31,7 +31,7 @@ class CxnState
 	CubeAddress peerAddr = CubeAddress.INVALID_ADDRESS;
 	
 	// CubeAddress topology -- used by INN
-	Topology topology = null;
+//	Topology topology = null;
 	
 	// Bitmap of ANNs that have been tried
 	BigInteger triedANNs = BigInteger.ZERO;

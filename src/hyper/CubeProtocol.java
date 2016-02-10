@@ -10,8 +10,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Vector;
 
-import hyper.CubeMessage.Type;
-
 /**
  * A class implementing the Cube protocol.
  * 
@@ -217,33 +215,33 @@ public class CubeProtocol
 
 	// State machine: { message received => acceptable state in which to receive it }
 	@SuppressWarnings({ "serial" })
-	private static HashMap<Type, Type> sm = new HashMap<Type, Type>() {
+	private static HashMap<CubeMessageType, CubeMessageType> sm = new HashMap<CubeMessageType, CubeMessageType>() {
 		{
 			// INN transitions
-			put(Type.CONN_GEN_INN_AVAIL, Type.CONN_INN_GEN_ANN);
-			put(Type.CONN_ANN_INN_SUCCESS, Type.CONN_INN_ANN_HANDOFF);
-			put(Type.CONN_ANN_INN_FAIL, Type.CONN_INN_ANN_HANDOFF);
+			put(CubeMessageType.CONN_GEN_INN_AVAIL, CubeMessageType.CONN_INN_GEN_ANN);
+			put(CubeMessageType.CONN_ANN_INN_SUCCESS, CubeMessageType.CONN_INN_ANN_HANDOFF);
+			put(CubeMessageType.CONN_ANN_INN_FAIL, CubeMessageType.CONN_INN_ANN_HANDOFF);
 
 			// ANN transitions
-			put(Type.CONN_INN_ANN_HANDOFF, Type.CONN_GEN_INN_AVAIL);
-			put(Type.CONN_EXT_ANN_ACCEPT, Type.CONN_ANN_EXT_OFFER);
-			put(Type.CONN_EXT_ANN_DECLINE, Type.CONN_ANN_EXT_OFFER);
-			put(Type.CONN_NBR_ANN_CONNECTED, Type.CONN_ANN_NBR_CONNECT);
-			put(Type.CONN_NBR_ANN_DISCONNECTED, Type.CONN_ANN_NBR_CONNECT);
-			put(Type.CONN_NBR_ANN_IDENTIFIED, Type.CONN_ANN_NBR_IDENTIFY);
-			put(Type.CONN_INN_GEN_CLEANUP, Type.CONN_GEN_INN_AVAIL);
+			put(CubeMessageType.CONN_INN_ANN_HANDOFF, CubeMessageType.CONN_GEN_INN_AVAIL);
+			put(CubeMessageType.CONN_EXT_ANN_ACCEPT, CubeMessageType.CONN_ANN_EXT_OFFER);
+			put(CubeMessageType.CONN_EXT_ANN_DECLINE, CubeMessageType.CONN_ANN_EXT_OFFER);
+			put(CubeMessageType.CONN_NBR_ANN_CONNECTED, CubeMessageType.CONN_ANN_NBR_CONNECT);
+			put(CubeMessageType.CONN_NBR_ANN_DISCONNECTED, CubeMessageType.CONN_ANN_NBR_CONNECT);
+			put(CubeMessageType.CONN_NBR_ANN_IDENTIFIED, CubeMessageType.CONN_ANN_NBR_IDENTIFY);
+			put(CubeMessageType.CONN_INN_GEN_CLEANUP, CubeMessageType.CONN_GEN_INN_AVAIL);
 
 			// NBR transitions
-			put(Type.CONN_EXT_NBR_ACCEPT, Type.CONN_NBR_EXT_OFFER);
-			put(Type.CONN_EXT_NBR_DECLINE, Type.CONN_NBR_EXT_OFFER);
-			put(Type.CONN_ANN_NBR_IDENTIFY, Type.CONN_NBR_ANN_CONNECTED);
+			put(CubeMessageType.CONN_EXT_NBR_ACCEPT, CubeMessageType.CONN_NBR_EXT_OFFER);
+			put(CubeMessageType.CONN_EXT_NBR_DECLINE, CubeMessageType.CONN_NBR_EXT_OFFER);
+			put(CubeMessageType.CONN_ANN_NBR_IDENTIFY, CubeMessageType.CONN_NBR_ANN_CONNECTED);
 
 			// EXT transitions
-			put(Type.CONN_ANN_EXT_OFFER, Type.CONN_EXT_INN_ATTACH);
-			put(Type.CONN_NBR_EXT_OFFER, Type.CONN_EXT_ANN_ACCEPT);
-			put(Type.CONN_NBR_EXT_IDENTIFY, Type.CONN_EXT_ANN_ACCEPT);
-			put(Type.CONN_ANN_EXT_SUCCESS, Type.CONN_EXT_ANN_ACCEPT);
-			put(Type.CONN_ANN_EXT_FAIL, Type.CONN_EXT_ANN_ACCEPT);
+			put(CubeMessageType.CONN_ANN_EXT_OFFER, CubeMessageType.CONN_EXT_INN_ATTACH);
+			put(CubeMessageType.CONN_NBR_EXT_OFFER, CubeMessageType.CONN_EXT_ANN_ACCEPT);
+			put(CubeMessageType.CONN_NBR_EXT_IDENTIFY, CubeMessageType.CONN_EXT_ANN_ACCEPT);
+			put(CubeMessageType.CONN_ANN_EXT_SUCCESS, CubeMessageType.CONN_EXT_ANN_ACCEPT);
+			put(CubeMessageType.CONN_ANN_EXT_FAIL, CubeMessageType.CONN_EXT_ANN_ACCEPT);
 		}
 	};
 
@@ -257,15 +255,13 @@ public class CubeProtocol
 	boolean blocking = false;
 	Thread blockingThread = null; // Only necessary for testing
 
-	CubeProtocol(MessageListener listener)
-	{
+	CubeProtocol(MessageListener listener) {
 		this.listener = listener;
 		listener.setProtocol(this);
 	}
 
 	// Determine if a message is meant for me. If so, return true; otherwise, forward it.
-	private boolean fwdMsg(CubeMessage msg)
-	{
+	private boolean fwdMsg(CubeMessage msg) {
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
 		CubeAddress frwd = CubeAddress.BCAST_FORWARD;
 		CubeAddress rvrs = CubeAddress.BCAST_REVERSE;
@@ -279,13 +275,11 @@ public class CubeProtocol
 			return true;
 
 		// Non-broadcast processing
-		if (dst.compareTo(BigInteger.ZERO) >= 0)
-		{
+		if (dst.compareTo(BigInteger.ZERO) >= 0) {
 			if (dst.equals(cubeState.addr))
 				// It's mine
 				return true;
-			else
-			{
+			else {
 				// It's not mine; forward it
 				unicastSend(msg);
 				return false;
@@ -293,10 +287,9 @@ public class CubeProtocol
 		}
 
 		// Broadcast processing
-		if (null == msg.getTravel() || !dst.equals(frwd) && !dst.equals(CubeAddress.BCAST_PROCESS))
-		{
+		if (null == msg.getTravel() || !dst.equals(frwd) && !dst.equals(CubeAddress.BCAST_PROCESS)) {
 			// The broadcast data are invalid
-			reply(msg, Type.INVALID_MSG, msg.getType());
+			reply(msg, CubeMessageType.INVALID_MSG, msg.getType());
 			return false;
 		}
 
@@ -320,8 +313,7 @@ public class CubeProtocol
 	 * @param msg
 	 *            the {@link CubeMessage} to process
 	 */
-	void process(CubeMessage msg)
-	{
+	void process(CubeMessage msg) {
 		// Forward messages that are not meant for me
 		if (!fwdMsg(msg))
 			return;
@@ -471,8 +463,7 @@ public class CubeProtocol
 	 * decision whether the advertised IP address is trustworthy up to the individual nodes, rather than a central
 	 * authority.
 	 */
-	private void conn_ext_inn_attach(CubeMessage msg)
-	{
+	private void conn_ext_inn_attach(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateExt(msg, null);
 		// CubeAddress none = CubeAddress.INVALID_ADDRESS;
@@ -498,8 +489,7 @@ public class CubeProtocol
 		InetSocketAddress addr = (InetSocketAddress) msg.getData();
 
 		// Edge case: I might be the only node in the Cube
-		if (cubeState.getDim() == 0)
-		{
+		if (cubeState.getDim() == 0) {
 			// Perform a blocking connection attempt, all the way through Phase 4
 			connectNodeToINN(addr, msg.getChannel());
 			return;
@@ -512,17 +502,16 @@ public class CubeProtocol
 		innState.innChan = msg.getChannel();
 
 		// Edge case: I have an open slot myself and I'm willing to take on this client
-		if (cubeState.vacancy() && amWilling(addr))
-		{
+		if (cubeState.vacancy() && amWilling(addr)) {
 			// Declare myself the ANN and enter Phase 2
 			innState.annAddr = cubeState.addr;
-			innState.state = Type.CONN_INN_ANN_HANDOFF;
+			innState.state = CubeMessageType.CONN_INN_ANN_HANDOFF;
 			conn_inn_ann_handoff(new CubeMessage(cubeState.addr, innState.annAddr, innState.state, addr));
 			return;
 		}
 
 		// Regular processing: broadcast an INN_GEN_ANN message
-		innState.state = Type.CONN_INN_GEN_ANN;
+		innState.state = CubeMessageType.CONN_INN_GEN_ANN;
 		bcastSend(new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, innState.state, addr, cubeState.getDim()));
 	}
 
@@ -531,8 +520,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: set up ANN state, and if I am a broadcast leaf, generate a reply
 	 */
-	private void conn_inn_gen_ann(CubeMessage msg)
-	{
+	private void conn_inn_gen_ann(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, null);
 		// if (null == addr)
@@ -572,13 +560,14 @@ public class CubeProtocol
 			payload = new Serializable[] { addr, zero, zero.setBit(cubeState.addr.intValue()) };
 		else
 			payload = new Serializable[] { addr, zero, zero };
-		unicastSend(new CubeMessage(CubeAddress.BCAST_REVERSE, msg.getSrc(), Type.CONN_GEN_INN_AVAIL, payload));
+		unicastSend(
+				new CubeMessage(CubeAddress.BCAST_REVERSE, msg.getSrc(), CubeMessageType.CONN_GEN_INN_AVAIL, payload));
 
 		// Update state, if required
 		if (!willing)
 			return;
 		else
-			annState.state = Type.CONN_GEN_INN_AVAIL;
+			annState.state = CubeMessageType.CONN_GEN_INN_AVAIL;
 	}
 
 	/**
@@ -586,8 +575,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: if
 	 */
-	private void conn_gen_inn_avail(CubeMessage msg)
-	{
+	private void conn_gen_inn_avail(CubeMessage msg) {
 		// // Validate the reply message
 		// Serializable[] payload = (Serializable[]) validateMsg(msg, null);
 		// if (null == payload)
@@ -624,14 +612,13 @@ public class CubeProtocol
 		// We are done; aggregate our own status
 		if (!amWilling(addr))
 			innState.unwilling = innState.unwilling.setBit(cubeState.addr.intValue());
-		innState.state = Type.CONN_GEN_INN_AVAIL;
+		innState.state = CubeMessageType.CONN_GEN_INN_AVAIL;
 		if (cubeState.vacancy())
 			innState.able = innState.able.setBit(cubeState.addr.intValue());
 
 		// If we're not the INN, forward the totals upstream then clean up
-		if (!cubeState.addr.equals(innState.innAddr))
-		{
-			unicastSend(new CubeMessage(CubeAddress.BCAST_REVERSE, innState.innAddr, Type.CONN_GEN_INN_AVAIL,
+		if (!cubeState.addr.equals(innState.innAddr)) {
+			unicastSend(new CubeMessage(CubeAddress.BCAST_REVERSE, innState.innAddr, CubeMessageType.CONN_GEN_INN_AVAIL,
 					new Serializable[] { addr, innState.unwilling, innState.able }));
 			cxnStates.remove(addr);
 			return;
@@ -640,20 +627,18 @@ public class CubeProtocol
 		// We're the INN, with aggregated totals in hand. Initialize state, then hand off to an ANN
 		innState.able = innState.able;
 		innState.unwilling = innState.unwilling;
-		innState.state = Type.CONN_INN_ANN_HANDOFF;
+		innState.state = CubeMessageType.CONN_INN_ANN_HANDOFF;
 		handoff(addr);
 	}
 
 	// Perform the INN => ANN hand off
-	private void handoff(InetSocketAddress addr)
-	{
+	private void handoff(InetSocketAddress addr) {
 		// INNState innState = innStates.get(addr);
 		CxnState innState = cxnStates.get(addr);
 
 		// Do we have ANNs to choose from?
 		NEXT_ANN:
-		while (!innState.able.equals(BigInteger.ZERO))
-		{
+		while (!innState.able.equals(BigInteger.ZERO)) {
 			// Determine a random potential ANN
 			int ann;
 			int link = 1 + (int) (Math.random() * innState.able.bitCount());
@@ -684,8 +669,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: initialize ANN state and contact prospective neighbors
 	 */
-	private void conn_inn_ann_handoff(CubeMessage msg)
-	{
+	private void conn_inn_ann_handoff(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, annStates);
 		// if (null == addr)
@@ -708,27 +692,24 @@ public class CubeProtocol
 		annState.peerAddr = cubeState.addr.followLink(link);
 
 		// Enter Phase 2
-		try
-		{
+		try {
 			// Connect to the client's CubeProtocol
 			annState.annChan = SocketChannel.open(addr);
 			listener.register(annState.annChan);
-		} catch (IOException e)
-		{
-			unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, Type.CONN_ANN_INN_FAIL, addr));
+		} catch (IOException e) {
+			unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, CubeMessageType.CONN_ANN_INN_FAIL, addr));
 			return;
 		}
 
 		// Set up my own neighbor state and offer the client an address
 		annState.annAddr = cubeState.addr;
-		annState.state = Type.CONN_ANN_EXT_OFFER;
+		annState.state = CubeMessageType.CONN_ANN_EXT_OFFER;
 		new CubeMessage(CubeAddress.INVALID_ADDRESS, annState.peerAddr, annState.state, cubeState.getDim())
 				.send(annState.annChan);
 	}
 
 	// INN processing to connect a client, bypassing several layers of protocol
-	private void connectNodeToINN(InetSocketAddress addr, SocketChannel innChan)
-	{
+	private void connectNodeToINN(InetSocketAddress addr, SocketChannel innChan) {
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
 		CubeAddress peerAddr = new CubeAddress(
 				BigInteger.ZERO.setBit(cubeState.getDim()).or(cubeState.addr).toString());
@@ -736,41 +717,35 @@ public class CubeProtocol
 
 		// Phase 1: successful, since I have identified an attachment point (myself)
 		// Phase 2: check all neighbors (i.e., myself) for willingness to connect
-		if (!amWilling(addr))
-		{
-			new CubeMessage(none, none, Type.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
+		if (!amWilling(addr)) {
+			new CubeMessage(none, none, CubeMessageType.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
 			quietClose(innChan);
 			return;
 		}
 
 		// Phase 3: offer a CubeAddress to the client
 		SocketChannel annChan;
-		try
-		{
+		try {
 			annChan = SocketChannel.open(addr);
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// If the address is unreachable, bail
-			new CubeMessage(none, none, Type.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
+			new CubeMessage(none, none, CubeMessageType.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
 			quietClose(innChan);
 			return;
 		}
-		new CubeMessage(none, peerAddr, Type.CONN_ANN_EXT_OFFER, cubeState.getDim()).send(annChan);
-		try
-		{
+		new CubeMessage(none, peerAddr, CubeMessageType.CONN_ANN_EXT_OFFER, cubeState.getDim()).send(annChan);
+		try {
 			msg = CubeMessage.recv(annChan);
-		} catch (IOException e1)
-		{
+		} catch (IOException e1) {
 			// If we get here, the client disconnected the annChan on us or the message data was garbage; bail
-			new CubeMessage(none, none, Type.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
+			new CubeMessage(none, none, CubeMessageType.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
 			quietClose(annChan);
 			quietClose(innChan);
 			return;
 		}
 
-		if (!Type.CONN_EXT_ANN_ACCEPT.equals(msg.getType()))
-		{
-			new CubeMessage(none, none, Type.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
+		if (!CubeMessageType.CONN_EXT_ANN_ACCEPT.equals(msg.getType())) {
+			new CubeMessage(none, none, CubeMessageType.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
 			quietClose(annChan);
 			quietClose(innChan);
 			return;
@@ -778,14 +753,12 @@ public class CubeProtocol
 
 		// Phase 4: successful since the only neighbor (me) already has a connection to the client
 		// Phase 5: reveal my CubeAddress and complete the connection
-		new CubeMessage(cubeState.addr, peerAddr, Type.CONN_NBR_EXT_IDENTIFY, null).send(annChan);
-		try
-		{
+		new CubeMessage(cubeState.addr, peerAddr, CubeMessageType.CONN_NBR_EXT_IDENTIFY, null).send(annChan);
+		try {
 			listener.register(annChan);
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// If we can't register this channel after sending a boatload of messages, well...
-			new CubeMessage(none, none, Type.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
+			new CubeMessage(none, none, CubeMessageType.CONN_INN_EXT_CONN_REFUSED, null).send(innChan);
 			quietClose(annChan);
 			quietClose(innChan);
 			return;
@@ -793,8 +766,9 @@ public class CubeProtocol
 
 		// Now that Phase 5 is complete, indicate success to everyone and update the routing information
 		quietClose(innChan);
-		bcastSend(new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, Type.CONN_INN_GEN_CLEANUP, addr));
-		new CubeMessage(cubeState.addr, peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(annChan);
+		bcastSend(
+				new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, CubeMessageType.CONN_INN_GEN_CLEANUP, addr));
+		new CubeMessage(cubeState.addr, peerAddr, CubeMessageType.CONN_ANN_EXT_SUCCESS, null).send(annChan);
 		cubeState.addNeighbor(cubeState.getDim(), annChan); // Side effect: updating the Cube dimension
 	}
 
@@ -807,8 +781,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: acknowledge the offer
 	 */
-	private void conn_ann_ext_offer(CubeMessage msg)
-	{
+	private void conn_ann_ext_offer(CubeMessage msg) {
 		// // Validate the message
 		// int dim = (int) validateInt(msg);
 		// cltState.annChan = msg.getChannel();
@@ -830,9 +803,8 @@ public class CubeProtocol
 
 		// Am I willing to have the ANN as my neighbor?
 		InetSocketAddress addr = quietAddr(cltState.annChan);
-		if (null == addr || !amWilling(addr))
-		{
-			new CubeMessage(none, none, Type.CONN_EXT_ANN_DECLINE, null).send(cltState.annChan);
+		if (null == addr || !amWilling(addr)) {
+			new CubeMessage(none, none, CubeMessageType.CONN_EXT_ANN_DECLINE, null).send(cltState.annChan);
 			quietClose(cltState.annChan);
 			return;
 		}
@@ -840,7 +812,7 @@ public class CubeProtocol
 		// Accept the offer
 		cubeState.addr = msg.getDst();
 		cubeState.setDim((int) msg.getData());
-		cltState.state = Type.CONN_EXT_ANN_ACCEPT;
+		cltState.state = CubeMessageType.CONN_EXT_ANN_ACCEPT;
 		new CubeMessage(cubeState.addr, none, cltState.state, null).send(cltState.annChan);
 	}
 
@@ -849,8 +821,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: instruct new neighbors to contact the client
 	 */
-	private void conn_ext_ann_accept(CubeMessage msg)
-	{
+	private void conn_ext_ann_accept(CubeMessage msg) {
 		// // Validate the message
 		// validateExt(msg, annStates);
 		// SocketChannel chan = msg.getChannel();
@@ -879,22 +850,21 @@ public class CubeProtocol
 		CxnState annState = cxnStates.get(addr);
 
 		// Enter Phase 4. First determine whether the new peer has at least one neighbor already connected
-		if (cubeState.getDim() > 1 + annState.invalid.bitCount())
-		{
+		if (cubeState.getDim() > 1 + annState.invalid.bitCount()) {
 			// Regular processing. Inform all the other neighbors to connect
 			annState.replies = 1;
-			annState.state = Type.CONN_ANN_NBR_CONNECT;
+			annState.state = CubeMessageType.CONN_ANN_NBR_CONNECT;
 			annBcast(annState, addr);
 			return;
 		}
 
 		// Edge case: I'm the only neighbor connected, skip straight to Phase 4
-		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_NBR_EXT_IDENTIFY, null).send(chan);
-		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(chan);
+		new CubeMessage(cubeState.addr, annState.peerAddr, CubeMessageType.CONN_NBR_EXT_IDENTIFY, null).send(chan);
+		new CubeMessage(cubeState.addr, annState.peerAddr, CubeMessageType.CONN_ANN_EXT_SUCCESS, null).send(chan);
 
 		// Inform the INN and clean up state
 		cxnStates.remove(addr);
-		unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, Type.CONN_ANN_INN_SUCCESS, addr));
+		unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, CubeMessageType.CONN_ANN_INN_SUCCESS, addr));
 
 		// Update the routing information
 		int link = cubeState.addr.relativeLink(annState.peerAddr);
@@ -906,8 +876,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: bail
 	 */
-	private void conn_ext_ann_decline(CubeMessage msg)
-	{
+	private void conn_ext_ann_decline(CubeMessage msg) {
 		// No need to check anything, since all paths lead to...
 		InetSocketAddress addr = quietAddr(msg.getChannel());
 		quietClose(msg.getChannel());
@@ -923,8 +892,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: attempt to connect, and report success/failure to ANN
 	 */
-	private void conn_ann_nbr_connect(CubeMessage msg)
-	{
+	private void conn_ann_nbr_connect(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, null);
 		// if (null == addr)
@@ -949,27 +917,23 @@ public class CubeProtocol
 		InetSocketAddress addr = (InetSocketAddress) msg.getData();
 		CxnState nbrState = cxnStates.get(addr);
 		nbrState.annAddr = msg.getSrc();
-		try
-		{
+		try {
 			nbrState.nbrChan = SocketChannel.open(addr);
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// The ANN was able to connect to the client but I can't, so bail
-			nbrState.state = Type.CONN_NBR_ANN_DISCONNECTED;
+			nbrState.state = CubeMessageType.CONN_NBR_ANN_DISCONNECTED;
 			unicastSend(new CubeMessage(cubeState.addr, nbrState.annAddr, nbrState.state, null));
 			return;
 		}
 
 		// Socket connection was successful, update state and offer Cube connection to the client
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
-		nbrState.state = Type.CONN_NBR_EXT_OFFER;
+		nbrState.state = CubeMessageType.CONN_NBR_EXT_OFFER;
 		new CubeMessage(none, none, nbrState.state, null).send(nbrState.nbrChan);
-		try
-		{
+		try {
 			listener.register(nbrState.nbrChan);
-		} catch (IOException e)
-		{
-			nbrState.state = Type.CONN_NBR_ANN_DISCONNECTED;
+		} catch (IOException e) {
+			nbrState.state = CubeMessageType.CONN_NBR_ANN_DISCONNECTED;
 			unicastSend(new CubeMessage(cubeState.addr, nbrState.annAddr, nbrState.state, null));
 			return;
 		}
@@ -980,8 +944,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: respond whether we're willing to accept the connection
 	 */
-	private void conn_nbr_ext_offer(CubeMessage msg)
-	{
+	private void conn_nbr_ext_offer(CubeMessage msg) {
 		// // Validate the message
 		// validateInt(msg);
 		// if (!chan.isOpen())
@@ -1004,20 +967,18 @@ public class CubeProtocol
 		SocketChannel chan = msg.getChannel();
 		InetSocketAddress addr = quietAddr(chan);
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
-		if (amWilling(addr))
-		{
+		if (amWilling(addr)) {
 			// ACK the neighbor without changing state
-			new CubeMessage(cubeState.addr, none, Type.CONN_EXT_NBR_ACCEPT, null).send(chan);
-		} else
-		{
+			new CubeMessage(cubeState.addr, none, CubeMessageType.CONN_EXT_NBR_ACCEPT, null).send(chan);
+		} else {
 			// Close existing channels and wait for new ANN to contact me to try again
 			CxnState cltState = cxnStates.values().iterator().next();
-			cltState.state = Type.CONN_EXT_NBR_DECLINE;
+			cltState.state = CubeMessageType.CONN_EXT_NBR_DECLINE;
 			new CubeMessage(cubeState.addr, none, cltState.state, null).send(chan);
 			for (SocketChannel c : cubeState.neighbors)
 				quietClose(c);
 			cubeState.neighbors = new Vector<>();
-			cltState.state = Type.CONN_EXT_INN_ATTACH;
+			cltState.state = CubeMessageType.CONN_EXT_INN_ATTACH;
 		}
 	}
 
@@ -1026,8 +987,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: report success to ANN if the CLT's CubeAddress looks good; otherwise, report failure
 	 */
-	private void conn_ext_nbr_accept(CubeMessage msg)
-	{
+	private void conn_ext_nbr_accept(CubeMessage msg) {
 		// // Validate the message
 		// validateExt(msg, nbrStates);
 		// if (!chan.isOpen())
@@ -1041,10 +1001,9 @@ public class CubeProtocol
 		// Determine which link this client will be on
 		CubeAddress peerAddr = msg.getSrc();
 		int link = cubeState.addr.relativeLink(peerAddr);
-		if (-1 == link)
-		{
+		if (-1 == link) {
 			// The ANN gave the client a CubeAddress that isn't our neighbor, so bail
-			nbrState.state = Type.CONN_NBR_ANN_DISCONNECTED;
+			nbrState.state = CubeMessageType.CONN_NBR_ANN_DISCONNECTED;
 			unicastSend(new CubeMessage(cubeState.addr, nbrState.annAddr, nbrState.state, addr));
 			return;
 		}
@@ -1053,7 +1012,7 @@ public class CubeProtocol
 		nbrState.peerAddr = peerAddr;
 
 		// Update the ANN
-		nbrState.state = Type.CONN_NBR_ANN_CONNECTED;
+		nbrState.state = CubeMessageType.CONN_NBR_ANN_CONNECTED;
 		unicastSend(new CubeMessage(cubeState.addr, nbrState.annAddr, nbrState.state, addr));
 	}
 
@@ -1062,14 +1021,13 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: close the connection and report failure to the ANN
 	 */
-	private void conn_ext_nbr_decline(CubeMessage msg)
-	{
+	private void conn_ext_nbr_decline(CubeMessage msg) {
 		// No need to check anything, since all paths lead to...
 		SocketChannel chan = msg.getChannel();
 		InetSocketAddress addr = quietAddr(chan);
 		quietClose(chan);
 		CxnState state = cxnStates.remove(addr);
-		unicastSend(new CubeMessage(cubeState.addr, state.annAddr, Type.CONN_NBR_ANN_DISCONNECTED, addr));
+		unicastSend(new CubeMessage(cubeState.addr, state.annAddr, CubeMessageType.CONN_NBR_ANN_DISCONNECTED, addr));
 	}
 
 	/**
@@ -1078,8 +1036,7 @@ public class CubeProtocol
 	 * Algorithm: record this fact, and if all neighbors have reported in, instruct them to advertise their
 	 * CubeAddresses
 	 */
-	private void conn_nbr_ann_connected(CubeMessage msg)
-	{
+	private void conn_nbr_ann_connected(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, annStates);
 		// if (null == addr)
@@ -1102,11 +1059,11 @@ public class CubeProtocol
 
 		// Enter Phase 4
 		annState.replies = 1;
-		annState.state = Type.CONN_ANN_NBR_IDENTIFY;
+		annState.state = CubeMessageType.CONN_ANN_NBR_IDENTIFY;
 		annBcast(annState, addr);
 
 		annState.peerAddr = annState.peerAddr;
-		annState.state = Type.CONN_NBR_EXT_IDENTIFY;
+		annState.state = CubeMessageType.CONN_NBR_EXT_IDENTIFY;
 		new CubeMessage(cubeState.addr, annState.peerAddr, annState.state, null);
 	}
 
@@ -1115,8 +1072,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: instruct all neighbors to tear down their connections, and inform client and INN
 	 */
-	private void conn_nbr_ann_disconnected(CubeMessage msg)
-	{
+	private void conn_nbr_ann_disconnected(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, annStates);
 		// if (null == addr)
@@ -1136,7 +1092,7 @@ public class CubeProtocol
 		CxnState annState = cxnStates.remove(addr);
 		int link = cubeState.addr.relativeLink(annState.peerAddr);
 		SocketChannel chan = cubeState.neighbors.remove(link);
-		annState.state = Type.CONN_ANN_EXT_FAIL;
+		annState.state = CubeMessageType.CONN_ANN_EXT_FAIL;
 		new CubeMessage(CubeAddress.INVALID_ADDRESS, annState.peerAddr, annState.state, null).send(chan);
 		quietClose(chan);
 
@@ -1153,8 +1109,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: send my CubeAddress to client
 	 */
-	private void conn_ann_nbr_identify(CubeMessage msg)
-	{
+	private void conn_ann_nbr_identify(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, nbrStates);
 		// if (null == addr)
@@ -1172,11 +1127,11 @@ public class CubeProtocol
 		CxnState nbrState = cxnStates.remove(addr);
 
 		// Advertise my CubeAddress
-		nbrState.state = Type.CONN_NBR_EXT_IDENTIFY;
+		nbrState.state = CubeMessageType.CONN_NBR_EXT_IDENTIFY;
 		new CubeMessage(cubeState.addr, nbrState.peerAddr, nbrState.state, null).send(nbrState.nbrChan);
 
 		// Inform the ANN (before updating the routing information)
-		nbrState.state = Type.CONN_NBR_ANN_IDENTIFIED;
+		nbrState.state = CubeMessageType.CONN_NBR_ANN_IDENTIFIED;
 		unicastSend(new CubeMessage(cubeState.addr, nbrState.annAddr, nbrState.state, addr));
 
 		// Update state
@@ -1188,8 +1143,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: add the new neighbor to my Cube state
 	 */
-	private void conn_nbr_ext_identify(CubeMessage msg)
-	{
+	private void conn_nbr_ext_identify(CubeMessage msg) {
 		// // Validate the message
 		// validateInt(msg);
 		// if (!chan.isOpen())
@@ -1203,10 +1157,9 @@ public class CubeProtocol
 		// Is the advertised address actually my neighbor?
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
 		int link = cubeState.addr.relativeLink(nAddr);
-		if (-1 == link)
-		{
-			new CubeMessage(cubeState.addr, none, Type.INVALID_DATA, new CubeAddress[] { cubeState.addr, nAddr })
-					.send(chan);
+		if (-1 == link) {
+			new CubeMessage(cubeState.addr, none, CubeMessageType.INVALID_DATA,
+					new CubeAddress[] { cubeState.addr, nAddr }).send(chan);
 			quietClose(chan);
 			return;
 		}
@@ -1220,8 +1173,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: if all neighbors have reported in, clean up my state and inform the INN of success
 	 */
-	private void conn_nbr_ann_identified(CubeMessage msg)
-	{
+	private void conn_nbr_ann_identified(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, annStates);
 		// if (null == addr)
@@ -1243,12 +1195,14 @@ public class CubeProtocol
 			return;
 
 		// Complete the connection
-		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_NBR_EXT_IDENTIFY, null).send(annState.annChan);
-		new CubeMessage(cubeState.addr, annState.peerAddr, Type.CONN_ANN_EXT_SUCCESS, null).send(annState.annChan);
+		new CubeMessage(cubeState.addr, annState.peerAddr, CubeMessageType.CONN_NBR_EXT_IDENTIFY, null)
+				.send(annState.annChan);
+		new CubeMessage(cubeState.addr, annState.peerAddr, CubeMessageType.CONN_ANN_EXT_SUCCESS, null)
+				.send(annState.annChan);
 
 		// Inform the INN and clean up state
 		cxnStates.remove(addr);
-		unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, Type.CONN_ANN_INN_SUCCESS, addr));
+		unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, CubeMessageType.CONN_ANN_INN_SUCCESS, addr));
 
 		// Update the routing information
 		int link = cubeState.addr.relativeLink(annState.peerAddr);
@@ -1260,8 +1214,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: wake up the application blocking on connect()
 	 */
-	private void conn_ann_ext_success(CubeMessage msg)
-	{
+	private void conn_ann_ext_success(CubeMessage msg) {
 		// // Validate the message and authenticate the source
 		// validateInt(msg);
 		// if (!msg.getChannel().isOpen() || !msg.getChannel().equals(cltState.annChan))
@@ -1270,8 +1223,7 @@ public class CubeProtocol
 		// We are fully connected
 		cxnStates.clear();
 		if (null != blockingThread)
-			synchronized (blockingThread)
-			{
+			synchronized (blockingThread) {
 				blocking = false;
 				blockingThread.notify();
 				blockingThread = null;
@@ -1283,8 +1235,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: Close the client SocketChannel
 	 */
-	private void conn_ann_inn_success(CubeMessage msg)
-	{
+	private void conn_ann_inn_success(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, innStates);
 		// if (null == addr)
@@ -1305,9 +1256,8 @@ public class CubeProtocol
 		quietClose(innState.innChan);
 
 		// Inform the other ANNs that they can flush state
-		innState.state = Type.CONN_INN_GEN_CLEANUP;
-		while (!innState.able.equals(BigInteger.ZERO))
-		{
+		innState.state = CubeMessageType.CONN_INN_GEN_CLEANUP;
+		while (!innState.able.equals(BigInteger.ZERO)) {
 			int link = innState.able.getLowestSetBit();
 			innState.able = innState.able.clearBit(link);
 			unicastSend(new CubeMessage(cubeState.addr, new CubeAddress(Integer.toString(link)), innState.state, addr));
@@ -1320,8 +1270,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up ANN state
 	 */
-	private void conn_inn_gen_cleanup(CubeMessage msg)
-	{
+	private void conn_inn_gen_cleanup(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, null);
 		// if (null == addr)
@@ -1349,8 +1298,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: reset connection state
 	 */
-	private void conn_inn_ext_conn_refused(CubeMessage msg)
-	{
+	private void conn_inn_ext_conn_refused(CubeMessage msg) {
 		System.err.println("Connection refused, exiting...");
 		System.exit(1);
 	}
@@ -1360,8 +1308,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up connection state
 	 */
-	private void conn_ann_ext_fail(CubeMessage msg)
-	{
+	private void conn_ann_ext_fail(CubeMessage msg) {
 		if (cxnStates.isEmpty())
 			return;
 
@@ -1375,8 +1322,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: clean up connection state
 	 */
-	private void conn_ann_nbr_fail(CubeMessage msg)
-	{
+	private void conn_ann_nbr_fail(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, null);
 		// if (null == addr)
@@ -1400,8 +1346,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: ask a different node at the same hop count to be ANN; if none remain, increase the hop count
 	 */
-	private void conn_ann_inn_fail(CubeMessage msg)
-	{
+	private void conn_ann_inn_fail(CubeMessage msg) {
 		// // Validate the message
 		// InetSocketAddress addr = (InetSocketAddress) validateMsg(msg, innStates);
 		// if (null == addr)
@@ -1423,24 +1368,18 @@ public class CubeProtocol
 	/*
 	 * Utility methods
 	 */
-	private void quietClose(SocketChannel chan)
-	{
-		try
-		{
+	private void quietClose(SocketChannel chan) {
+		try {
 			chan.close();
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// Fail silently
 		}
 	}
 
-	private InetSocketAddress quietAddr(SocketChannel chan)
-	{
-		try
-		{
+	private InetSocketAddress quietAddr(SocketChannel chan) {
+		try {
 			return (InetSocketAddress) chan.getRemoteAddress();
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// The channel isn't connected
 			return null;
 		}
@@ -1449,19 +1388,17 @@ public class CubeProtocol
 	/**
 	 * Node must respond to sending an invalid address, depending on protocol state.
 	 */
-	private void invalid_address(CubeMessage msg)
-	{
+	private void invalid_address(CubeMessage msg) {
 		Serializable[] data = (Serializable[]) msg.getData();
-		Type origType = (Type) data[0];
+		CubeMessageType origType = (CubeMessageType) data[0];
 
 		// Process based on our type
-		if (origType == Type.DATA_MSG)
-		{
+		if (origType == CubeMessageType.DATA_MSG) {
 			// Queue an "invalid" message -- only the source address and data will be visible to applications
-			queued.add(new CubeMessage(CubeAddress.INVALID_ADDRESS, msg.getDst(), Type.INVALID_MSG, msg.getSrc()));
+			queued.add(new CubeMessage(CubeAddress.INVALID_ADDRESS, msg.getDst(), CubeMessageType.INVALID_MSG,
+					msg.getSrc()));
 			if (blocking)
-				synchronized (blockingThread)
-				{
+				synchronized (blockingThread) {
 					blocking = false;
 					blockingThread.notify();
 				}
@@ -1473,10 +1410,8 @@ public class CubeProtocol
 	}
 
 	// Phases 2-4: Send a message to all prospective neighbors
-	private void annBcast(CxnState annState, InetSocketAddress addr)
-	{
-		for (int i = 0; i < cubeState.getDim(); ++i)
-		{
+	private void annBcast(CxnState annState, InetSocketAddress addr) {
+		for (int i = 0; i < cubeState.getDim(); ++i) {
 			// Determine each node's CubeAddress
 			CubeAddress nbrAddr = annState.peerAddr.followLink(i);
 			if (cubeState.addr.equals(nbrAddr) || annState.invalid.testBit(nbrAddr.intValue()))
@@ -1488,16 +1423,15 @@ public class CubeProtocol
 	}
 
 	// Phases 2-4: Notify everyone if an ANN determines that a connection cannot be made
-	private void annBail(InetSocketAddress addr)
-	{
+	private void annBail(InetSocketAddress addr) {
 		CxnState annState = cxnStates.remove(addr);
 
 		// Inform the neighbors
-		annState.state = Type.CONN_ANN_NBR_FAIL;
+		annState.state = CubeMessageType.CONN_ANN_NBR_FAIL;
 		annBcast(annState, addr);
 
 		// Inform the INN
-		annState.state = Type.CONN_ANN_INN_FAIL;
+		annState.state = CubeMessageType.CONN_ANN_INN_FAIL;
 		unicastSend(new CubeMessage(cubeState.addr, annState.innAddr, annState.state, addr));
 	}
 
@@ -1510,8 +1444,7 @@ public class CubeProtocol
 	 * 
 	 * Algorithm: add the message to my local received message queue
 	 */
-	private void data_msg(CubeMessage msg)
-	{
+	private void data_msg(CubeMessage msg) {
 		/*
 		 * Lazily update Cube dimension. Worst case scenario: a neighbor maliciously sends forged CubeMessages having
 		 * ever-increasing source addresses. In this case, the neighbor will become able to support many new
@@ -1524,15 +1457,13 @@ public class CubeProtocol
 		// Add this message to my queue
 		queued.add(msg);
 		if (blocking)
-			synchronized (blockingThread)
-			{
+			synchronized (blockingThread) {
 				blocking = false;
 				blockingThread.notify();
 			}
 	}
 
-	private void node_shutdown(CubeMessage msg)
-	{
+	private void node_shutdown(CubeMessage msg) {
 		// TODO
 
 	}
@@ -1543,12 +1474,10 @@ public class CubeProtocol
 	 * 
 	 * @param chan
 	 */
-	void closedCxn(SocketChannel chan)
-	{
+	void closedCxn(SocketChannel chan) {
 		// Locate the channel that went down
 		int link = cubeState.neighbors.indexOf(chan);
-		if (-1 == link)
-		{
+		if (-1 == link) {
 			// This should never happen
 			System.err.println("closedCxn() called on non-connected channel!");
 			return;
@@ -1571,8 +1500,7 @@ public class CubeProtocol
 	 *            The {@link InetSocketAddress} of the peer that wishes to connect
 	 * @return Whether I am willing to permit the connection
 	 */
-	protected boolean amWilling(InetSocketAddress addr)
-	{
+	protected boolean amWilling(InetSocketAddress addr) {
 		return true;
 	}
 
@@ -1582,8 +1510,7 @@ public class CubeProtocol
 	 * @param link
 	 *            The link number of the disconnected neighbor
 	 */
-	protected void neighborDisconnected(int link)
-	{
+	protected void neighborDisconnected(int link) {
 	}
 
 	/**
@@ -1595,8 +1522,7 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if the argument is <code>null</code>, or if a connection to the INN cannot be established
 	 */
-	public void connect(InetSocketAddress innAddr) throws CubeException
-	{
+	public void connect(InetSocketAddress innAddr) throws CubeException {
 		// Sanity checks
 		if (null == innAddr)
 			throw new CubeException("connect() called with null INN address");
@@ -1604,37 +1530,30 @@ public class CubeProtocol
 		// Initialize client connection state
 		CxnState cltState = new CxnState();
 		cxnStates.put(innAddr, cltState); // the key is irrelevant
-		try
-		{
+		try {
 			cltState.innChan = SocketChannel.open(innAddr);
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			throw new CubeException("connect() unable to open a SocketChannel to " + innAddr);
 		}
-		cltState.state = Type.CONN_EXT_INN_ATTACH;
+		cltState.state = CubeMessageType.CONN_EXT_INN_ATTACH;
 
 		// Send the ATTACH message
 		new CubeMessage(CubeAddress.INVALID_ADDRESS, CubeAddress.INVALID_ADDRESS, cltState.state, listener.getAddress())
 				.send(cltState.innChan);
-		try
-		{
+		try {
 			listener.register(cltState.innChan);
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			throw new CubeException("connect() unable to register the connection to " + innAddr);
 		}
 
 		// Wait until we're done connecting to return
 		blocking = true;
 		blockingThread = Thread.currentThread();
-		synchronized (blockingThread)
-		{
+		synchronized (blockingThread) {
 			while (blocking)
-				try
-				{
+				try {
 					blockingThread.wait();
-				} catch (InterruptedException e)
-				{
+				} catch (InterruptedException e) {
 				}
 		}
 		blockingThread = null;
@@ -1645,8 +1564,7 @@ public class CubeProtocol
 	 * 
 	 * @return The dimension
 	 */
-	public int getDimension()
-	{
+	public int getDimension() {
 		return cubeState.getDim();
 	}
 
@@ -1655,8 +1573,7 @@ public class CubeProtocol
 	 * 
 	 * @return The <code>CubeAddress</code>
 	 */
-	public CubeAddress getCubeAddress()
-	{
+	public CubeAddress getCubeAddress() {
 		return cubeState.addr;
 	}
 
@@ -1665,15 +1582,12 @@ public class CubeProtocol
 	 * 
 	 * @return A {@link Vector} of the addresses
 	 */
-	public Vector<InetSocketAddress> getNeighbors()
-	{
+	public Vector<InetSocketAddress> getNeighbors() {
 		Vector<InetSocketAddress> ret = new Vector<>();
 		for (SocketChannel chan : cubeState.neighbors)
-			try
-			{
+			try {
 				ret.addElement((InetSocketAddress) chan.getRemoteAddress());
-			} catch (IOException e)
-			{
+			} catch (IOException e) {
 			}
 		return ret;
 	}
@@ -1696,8 +1610,7 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if the <code>Message</code> does not specify a proper {@link CubeAddress}
 	 */
-	public boolean send(Message msg) throws CubeException
-	{
+	public boolean send(Message msg) throws CubeException {
 		// Check for idiocy
 		if (null == cubeState)
 			throw new CubeException("send() called on unconnected Cube");
@@ -1707,7 +1620,7 @@ public class CubeProtocol
 			throw new CubeException("send() called with invalid (negative) peer CubeAddress");
 
 		// Send the message
-		return unicastSend(new CubeMessage(cubeState.addr, msg.peer, Type.DATA_MSG, msg.data));
+		return unicastSend(new CubeMessage(cubeState.addr, msg.peer, CubeMessageType.DATA_MSG, msg.data));
 	}
 
 	/*
@@ -1716,29 +1629,24 @@ public class CubeProtocol
 	 * response to a forged request will send a bogus message to another connected node, which will reply with
 	 * INVALID_STATE.
 	 */
-	private boolean unicastSend(CubeMessage msg)
-	{
+	private boolean unicastSend(CubeMessage msg) {
 		// Check for idiocy and/or forged messages
-		if (msg.getDst().bitLength() > cubeState.getDim())
-		{
+		if (msg.getDst().bitLength() > cubeState.getDim()) {
 			// Tried to send a message to a node outside the address space
-			unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), Type.INVALID_ADDRESS,
+			unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessageType.INVALID_ADDRESS,
 					new Serializable[] { msg.getType(), msg.getData() }));
 			return false;
 		}
 
-		if (cubeState.addr.equals(msg.getDst()))
-		{
+		if (cubeState.addr.equals(msg.getDst())) {
 			// Loop back
 			process(msg);
 			return true;
-		} else
-		{
+		} else {
 			int link = cubeState.addr.xor(msg.getDst()).and(cubeState.links).getLowestSetBit();
-			if (-1 == link)
-			{
+			if (-1 == link) {
 				// Tried to send a message to a non-connected node
-				unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), Type.INVALID_ADDRESS,
+				unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessageType.INVALID_ADDRESS,
 						new Serializable[] { msg.getType(), msg.getData() }));
 				return false;
 			}
@@ -1747,8 +1655,7 @@ public class CubeProtocol
 	}
 
 	// Reply to a message with a new message type and data
-	private void reply(CubeMessage request, Type type, Serializable data)
-	{
+	private void reply(CubeMessage request, CubeMessageType type, Serializable data) {
 		unicastSend(new CubeMessage(cubeState.addr, request.getSrc(), type, data));
 	}
 
@@ -1762,8 +1669,7 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if the <code>Message</code> does not specify a proper {@link CubeAddress}
 	 */
-	public void reply(Message msg, Serializable data) throws CubeException
-	{
+	public void reply(Message msg, Serializable data) throws CubeException {
 		// Check for idiocy
 		if (null == cubeState)
 			throw new CubeException("reply() called on unconnected Cube");
@@ -1772,7 +1678,7 @@ public class CubeProtocol
 		if (BigInteger.ZERO.compareTo(msg.peer) > 0)
 			throw new CubeException("reply() called with invalid (negative) peer CubeAddress");
 
-		unicastSend(new CubeMessage(cubeState.addr, msg.peer, Type.DATA_MSG, data));
+		unicastSend(new CubeMessage(cubeState.addr, msg.peer, CubeMessageType.DATA_MSG, data));
 	}
 
 	/**
@@ -1785,13 +1691,12 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if no Cube is connected
 	 */
-	public boolean broadcast(Serializable data) throws CubeException
-	{
+	public boolean broadcast(Serializable data) throws CubeException {
 		if (null == cubeState)
 			throw new CubeException("broadcast() called on unconnected Cube");
 
-		CubeMessage bcastMsg = new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, Type.DATA_MSG, data,
-				cubeState.getDim());
+		CubeMessage bcastMsg = new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, CubeMessageType.DATA_MSG,
+				data, cubeState.getDim());
 		return bcastSend(bcastMsg);
 	}
 
@@ -1799,8 +1704,7 @@ public class CubeProtocol
 	 * Forward a broadcast message through the Cube using Katseff Algorithm 6. Returns whether the message was forwarded
 	 * successfully (which should always be true, since we gracefully handle neighbor SocketChannel closures).
 	 */
-	private boolean bcastSend(CubeMessage msg)
-	{
+	private boolean bcastSend(CubeMessage msg) {
 		// Initial message validation
 		BigInteger travel = msg.getTravel();
 		if (null == travel)
@@ -1810,8 +1714,7 @@ public class CubeProtocol
 		BigInteger newtravel = travel.or(cubeState.links.not().abs()).clearBit(cubeState.getDim());
 
 		// Loop over all links, from most significant to least, turning off bits in newtravel as we go
-		for (int link = cubeState.getDim() - 1; link >= 0; --link)
-		{
+		for (int link = cubeState.getDim() - 1; link >= 0; --link) {
 			// Turn off the bit for this link in newtravel if we are connected along it
 			if (cubeState.links.testBit(link))
 				newtravel = newtravel.clearBit(link);
@@ -1835,8 +1738,7 @@ public class CubeProtocol
 	 * 
 	 * @return whether a <code>Message</code> is available to be read
 	 */
-	public boolean available()
-	{
+	public boolean available() {
 		return !queued.isEmpty();
 	}
 
@@ -1847,8 +1749,7 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if no Cube is connected
 	 */
-	public Message recvNow() throws CubeException
-	{
+	public Message recvNow() throws CubeException {
 		if (null == cubeState)
 			throw new CubeException("recvNow() called on unconnected Cube");
 
@@ -1865,14 +1766,12 @@ public class CubeProtocol
 	 * @throws CubeException
 	 *             if no Cube is connected
 	 */
-	public Message recv() throws CubeException
-	{
+	public Message recv() throws CubeException {
 		if (null == cubeState)
 			throw new CubeException("recvNow() called on unconnected Cube");
 
 		CubeMessage msg = null;
-		if (!queued.isEmpty())
-		{
+		if (!queued.isEmpty()) {
 			msg = queued.remove(0);
 			return new Message(msg.getSrc(), msg.getData());
 		}
@@ -1884,13 +1783,10 @@ public class CubeProtocol
 		blocking = true;
 		blockingThread = Thread.currentThread();
 		while (blocking)
-			synchronized (blockingThread)
-			{
-				try
-				{
+			synchronized (blockingThread) {
+				try {
 					blockingThread.wait();
-				} catch (InterruptedException e)
-				{
+				} catch (InterruptedException e) {
 				}
 			}
 		blockingThread = null;
@@ -1902,8 +1798,7 @@ public class CubeProtocol
 	 * Shut down a {@link CubeProtocol}. This method invalidates all Cube state, and shuts down the associated
 	 * {@link MessageListener} as well.
 	 */
-	public void shutdown()
-	{
+	public void shutdown() {
 		// Terminate neighbor connections
 		listener.shutdown();
 	}
