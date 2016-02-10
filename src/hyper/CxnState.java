@@ -45,19 +45,4 @@ class CxnState
 	BigInteger unwilling = BigInteger.ZERO;
 	BigInteger able = BigInteger.ZERO;
 	BigInteger invalid = BigInteger.ZERO;
-
-	/**
-	 * Obtain this node's current connection state that pertains to a received message. This is called by
-	 * {@link CubeProtocol#process(CubeMessage)} after the message format has been validated.
-	 * 
-	 * @param state
-	 *            The current {@link CubeState}
-	 * @param msg
-	 *            The {@link CubeMessage} to be processed
-	 * @return The current {@link CxnState} with respect to this connection
-	 */
-	static CxnState getCxnState(CubeState state, CubeMessage msg)
-	{
-		return null;
-	}
 }

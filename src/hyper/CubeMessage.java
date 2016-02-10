@@ -28,7 +28,7 @@ class CubeMessage implements Serializable
 	private CubeAddress dst = CubeAddress.INVALID_ADDRESS;
 
 	// Path information used for route requests and broadcasts; see Katseff
-	private BigInteger travel = new BigInteger("-1");
+	private BigInteger travel = CubeAddress.INVALID_ADDRESS;
 
 	// Type of message
 	private CubeMessageType type = CubeMessageType.INVALID_FORMAT;
@@ -43,7 +43,8 @@ class CubeMessage implements Serializable
 	private SocketChannel channel = null;
 
 	@Override
-	public String toString() {
+	public String toString()
+	{
 		return "CubeMessage (" + src + "=>" + dst + ") type " + type + " for peer " + peer + ", with data: " + data;
 	}
 
@@ -78,7 +79,8 @@ class CubeMessage implements Serializable
 	 *            The {@link SocketChannel}
 	 * @return Whether the message was sent
 	 */
-	boolean send(SocketChannel chan) {
+	boolean send(SocketChannel chan)
+	{
 		/*
 		 * This is a non-blocking send; the receive on the other end is still blocking. Note that the channel is not
 		 * serializeable, so we have to save it temporarily.
@@ -117,7 +119,8 @@ class CubeMessage implements Serializable
 	 * @return a received {@link CubeMessage}, or <code>null</code> if unsuccessful
 	 * @throws IOException
 	 */
-	static CubeMessage recv(SocketChannel chan) throws IOException {
+	static CubeMessage recv(SocketChannel chan) throws IOException
+	{
 		// First, determine the size of the CubeMessage object
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		chan.read(buf);
@@ -145,20 +148,21 @@ class CubeMessage implements Serializable
 	 * 
 	 * @return Whether the message is properly formatted.
 	 */
-	boolean hasProperFormat() {
+	boolean hasProperFormat()
+	{
 		CubeAddress none = CubeAddress.INVALID_ADDRESS;
 		CubeAddress bprc = CubeAddress.BCAST_PROCESS;
 		CubeAddress brvs = CubeAddress.BCAST_REVERSE;
 		switch (type) {
 		case CONN_ANN_EXT_OFFER:
 			// Fix data when re-implementing Phase 2
-			return none == src && null != dst && dst.isUnicast() && null == travel && null == peer && null != data
-					&& data instanceof Integer;
+			return none.equals(src) && null != dst && dst.isUnicast() && none.equals(travel) && null == peer
+					&& null != data && data instanceof Integer;
 		case CONN_ANN_EXT_FAIL:
 		case CONN_ANN_EXT_SUCCESS:
 		case CONN_NBR_EXT_IDENTIFY:
-			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && null == travel && null == peer
-					&& null == data;
+			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && none.equals(travel)
+					&& null == peer && null == data;
 		case CONN_ANN_INN_FAIL:
 		case CONN_ANN_INN_SUCCESS:
 		case CONN_ANN_NBR_CONNECT:
@@ -169,28 +173,28 @@ class CubeMessage implements Serializable
 		case CONN_NBR_ANN_DISCONNECTED:
 		case CONN_NBR_ANN_IDENTIFIED:
 			// Fix when peer is actually encrypted
-			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && null == travel && null != peer
-					&& peer instanceof InetSocketAddress && null == data;
+			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && none.equals(travel)
+					&& null != peer && null == data;
 		case CONN_EXT_ANN_ACCEPT:
 		case CONN_EXT_NBR_ACCEPT:
-			return null != src && src.isUnicast() && none == dst && null == travel && null == peer && null == data;
+			return null != src && src.isUnicast() && none.equals(dst) && none.equals(travel) && null == peer
+					&& null == data;
 		case CONN_EXT_ANN_DECLINE:
 		case CONN_EXT_NBR_DECLINE:
 		case CONN_INN_EXT_CONN_REFUSED:
 		case CONN_NBR_EXT_OFFER:
-			return none == src && none == dst && null == travel && null == peer && null == data;
+			return none.equals(src) && none.equals(dst) && none.equals(travel) && null == peer && null == data;
 		case CONN_EXT_INN_ATTACH:
-			return none == src && none == dst && null == travel && null != peer && peer instanceof InetSocketAddress
-					&& null == data;
+			return none.equals(src) && none.equals(dst) && none.equals(travel) && null != peer && null == data;
 		case CONN_GEN_INN_AVAIL:
 			// No INN authorization; fix data when topological ANN selection is implemented; fix peer when encrypted
-			return brvs == src && null != dst && dst.isUnicast() && null != travel && travel instanceof BigInteger
-					&& null != peer && peer instanceof InetSocketAddress && null != data && data instanceof BigInteger;
+			return brvs.equals(src) && null != dst && dst.isUnicast() && none.equals(travel) && null != peer
+					&& null != data && data instanceof BigInteger[];
 		case CONN_INN_GEN_ANN:
 		case CONN_INN_GEN_CLEANUP:
-			// No INN authorization; fix peer when encrypted
-			return null != src && src.isUnicast() && bprc == dst && null != travel && travel instanceof BigInteger
-					&& null != peer && peer instanceof InetSocketAddress && null == data;
+			// No INN authorization; fix peer when encrypted; remove CLEANUP entirely when broadcast implemented
+			return null != src && src.isUnicast() && bprc.equals(dst) && !none.equals(travel) && null != peer
+					&& null == data;
 		case INVALID_ADDRESS: // FIXME
 		case INVALID_DATA: // FIXME
 		case INVALID_FORMAT: // FIXME
@@ -198,20 +202,79 @@ class CubeMessage implements Serializable
 		case NODE_SHUTDOWN:
 			return true;
 		case UNICAST_MSG:
-			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && null == travel && null == peer;
+			return null != src && src.isUnicast() && null != dst && dst.isUnicast() && none.equals(travel)
+					&& null == peer;
 		case BROADCAST_MSG:
-			return null != src && src.isUnicast() && null != dst && dst.isBcast() && null != travel && null == peer;
+			return null != src && src.isUnicast() && null != dst && dst.isBcast() && !none.equals(travel)
+					&& null == peer;
 		case REVERSE_BROADCAST_MSG:
-			return null != src && src.isBcast() && null != dst && dst.isUnicast() && null != travel && null == peer;
+			return null != src && src.isBcast() && null != dst && dst.isUnicast() && none.equals(travel)
+					&& null == peer;
 		default:
 			return false;
 		}
 	}
 
 	/**
+	 * Obtain the {@link InetSocketAddress} of the peer to whom this connection message pertains. This is called by
+	 * {@link CubeProtocol#process(CubeMessage)} after the message format has been validated.
+	 * 
+	 * @param state
+	 *            The current {@link CubeState}
+	 * @param msg
+	 *            The {@link CubeMessage} to be processed
+	 * @return The current {@link CxnState} with respect to this connection
+	 */
+	InetSocketAddress getPeer()
+	{
+		switch (type) {
+		// Cases where I am the peer
+		case CONN_ANN_EXT_FAIL:
+		case CONN_ANN_EXT_OFFER:
+		case CONN_ANN_EXT_SUCCESS:
+		case CONN_INN_EXT_CONN_REFUSED:
+		case CONN_NBR_EXT_IDENTIFY:
+		case CONN_NBR_EXT_OFFER:
+			return Utilities.quietLocal(channel);
+
+		// Cases where the peer sent me this message
+		case CONN_EXT_ANN_ACCEPT:
+		case CONN_EXT_ANN_DECLINE:
+		case CONN_EXT_NBR_ACCEPT:
+		case CONN_EXT_NBR_DECLINE:
+			return Utilities.quietRemote(channel);
+
+		// All other cases pertaining to connections -- fix return value once encryption is implemented
+		case CONN_ANN_INN_FAIL:
+		case CONN_ANN_INN_SUCCESS:
+		case CONN_ANN_NBR_CONNECT:
+		case CONN_ANN_NBR_FAIL:
+		case CONN_ANN_NBR_IDENTIFY:
+		case CONN_EXT_INN_ATTACH: // Special case processing
+		case CONN_GEN_INN_AVAIL:
+		case CONN_INN_ANN_HANDOFF:
+		case CONN_INN_GEN_ANN:
+		case CONN_INN_GEN_CLEANUP:
+		case CONN_NBR_ANN_CONNECTED:
+		case CONN_NBR_ANN_DISCONNECTED:
+		case CONN_NBR_ANN_IDENTIFIED:
+		case INVALID_ADDRESS:
+		case INVALID_DATA:
+		case INVALID_FORMAT:
+		case INVALID_STATE:
+			return peer;
+
+		// All other cases should have a null peer
+		default:
+			return null;
+		}
+	}
+
+	/**
 	 * Reply to this message's sender that its format is invalid.
 	 */
-	void replyInvalid(CubeMessageType type) {
+	void replyInvalid(CubeMessageType type)
+	{
 		// We don't need to save any fields, since we're improperly formatted anyway
 		CubeAddress tmp = src;
 		src = dst;
@@ -223,39 +286,43 @@ class CubeMessage implements Serializable
 	/**
 	 * Reply to this message's sender that its state machine has an improper state.
 	 */
-	void replyState() {
+	void replyState()
+	{
 
 	}
 
-	CubeAddress getSrc() {
+	CubeAddress getSrc()
+	{
 		return src;
 	}
 
-	CubeAddress getDst() {
+	CubeAddress getDst()
+	{
 		return dst;
 	}
 
-	BigInteger getTravel() {
+	BigInteger getTravel()
+	{
 		return travel;
 	}
 
-	void setTravel(BigInteger travel) {
+	void setTravel(BigInteger travel)
+	{
 		this.travel = travel;
 	}
 
-	CubeMessageType getType() {
+	CubeMessageType getType()
+	{
 		return type;
 	}
 
-	InetSocketAddress getPeer() {
-		return peer;
-	}
-
-	Serializable getData() {
+	Serializable getData()
+	{
 		return data;
 	}
 
-	SocketChannel getChannel() {
+	SocketChannel getChannel()
+	{
 		return channel;
 	}
 }
