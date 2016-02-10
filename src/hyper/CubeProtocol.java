@@ -553,10 +553,15 @@ public class CubeProtocol
 		cxnStates.put(addr, annState);
 		annState.innAddr = msg.getSrc();
 
-		// If we're just forwarding, wait for replies
+		// If we're just forwarding, initialize and wait for replies
 		BigInteger zero = BigInteger.ZERO;
-		if (!msg.getTravel().and(cubeState.links).equals(zero))
+		if (!msg.getTravel().and(cubeState.links).equals(zero)) {
+			if (!amWilling(addr))
+				annState.unwilling = annState.unwilling.setBit(cubeState.addr.intValue());
+			if (cubeState.vacancy())
+				annState.able = annState.able.setBit(cubeState.addr.intValue());
 			return;
+		}
 
 		// We're replying, so determine the payload and reply
 		Serializable[] payload;
@@ -611,23 +616,17 @@ public class CubeProtocol
 		// Aggregate data
 		innState.unwilling = innState.unwilling.or((BigInteger) payload[0]);
 		innState.able = innState.able.or((BigInteger) payload[1]);
-		innState.replies++;
 
 		// Are we done aggregating everyone else?
-		if (innState.replies + innState.invalid.bitCount() < cubeState.getDim())
+		boolean isINN = cubeState.addr.equals(innState.innAddr);
+		if (++innState.replies + (isINN ? 0 : 1) < cubeState.links.bitCount())
 			return;
 
-		// We are done; aggregate our own status
-		if (!amWilling(addr))
-			innState.unwilling = innState.unwilling.setBit(cubeState.addr.intValue());
-		innState.state = CubeMessageType.CONN_GEN_INN_AVAIL;
-		if (cubeState.vacancy())
-			innState.able = innState.able.setBit(cubeState.addr.intValue());
-
 		// If we're not the INN, forward the totals upstream then clean up
-		if (!cubeState.addr.equals(innState.innAddr)) {
-			unicastSend(new CubeMessage(CubeAddress.BCAST_REVERSE, innState.innAddr, CubeMessageType.CONN_GEN_INN_AVAIL,
-					addr, new BigInteger[] { innState.unwilling, innState.able }));
+		if (!isINN) {
+			innState.state = CubeMessageType.CONN_GEN_INN_AVAIL;
+			unicastSend(new CubeMessage(CubeAddress.BCAST_REVERSE, innState.innAddr, innState.state, addr,
+					new BigInteger[] { innState.unwilling, innState.able }));
 			cxnStates.remove(addr);
 			return;
 		}
@@ -1081,7 +1080,7 @@ public class CubeProtocol
 		CxnState annState = cxnStates.get(addr);
 
 		// Record the success and check for Phase 4
-		if (++annState.replies + annState.invalid.bitCount() < cubeState.getDim())
+		if (++annState.replies < cubeState.links.bitCount())
 			return;
 
 		// Enter Phase 4
@@ -1222,7 +1221,7 @@ public class CubeProtocol
 		CxnState annState = cxnStates.get(addr);
 
 		// Are we done?
-		if (++annState.replies + annState.invalid.bitCount() < cubeState.getDim())
+		if (++annState.replies < cubeState.links.bitCount())
 			return;
 
 		// Complete the connection
@@ -1657,32 +1656,26 @@ public class CubeProtocol
 	 * Send a message through the Cube using Katseff Algorithm 3 (with LSB instead of MSB ordering). Invoking this
 	 * method cannot divulge confidential address information to a non-connected node; at worst, using this method as a
 	 * response to a forged request will send a bogus message to another connected node, which will reply with
-	 * INVALID_STATE.
+	 * INVALID_FORMAT.
 	 */
 	private boolean unicastSend(CubeMessage msg)
 	{
-		// Check for idiocy and/or forged messages
-		if (msg.getDst().bitLength() > cubeState.getDim()) {
-			// Tried to send a message to a node outside the address space
-			unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessageType.INVALID_ADDRESS, msg.getPeer(),
-					new Serializable[] { msg.getType(), msg.getData() }));
-			return false;
-		}
-
+		// Loop back?
 		if (cubeState.addr.equals(msg.getDst())) {
-			// Loop back
 			process(msg);
 			return true;
-		} else {
-			int link = cubeState.addr.xor(msg.getDst()).and(cubeState.links).getLowestSetBit();
-			if (-1 == link) {
-				// Tried to send a message to a non-connected node
+		}
+
+		// Nope, forward
+		int link = cubeState.addr.xor(msg.getDst()).and(cubeState.links).getLowestSetBit();
+		if (-1 == link) {
+			// We tried to send a message to a non-connected node
+			if (msg.getSrc().bitLength() <= cubeState.getDim()) // Idiocy shield
 				unicastSend(new CubeMessage(msg.getDst(), msg.getSrc(), CubeMessageType.INVALID_ADDRESS, msg.getPeer(),
 						new Serializable[] { msg.getType(), msg.getData() }));
-				return false;
-			}
-			return msg.send(cubeState.neighbors.get(link));
+			return false;
 		}
+		return msg.send(cubeState.neighbors.get(link));
 	}
 
 	// Reply to a message with a new message type and data
@@ -1841,6 +1834,8 @@ public class CubeProtocol
 	public void shutdown()
 	{
 		// Terminate neighbor connections
+		for (SocketChannel chan : cubeState.neighbors)
+			Utilities.quietClose(chan);
 		listener.shutdown();
 	}
 }
