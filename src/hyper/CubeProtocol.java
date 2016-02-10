@@ -1583,7 +1583,7 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Obtain the dimension of the Cube.
+	 * Obtain the dimension of a connected Cube.
 	 * 
 	 * @return The dimension
 	 */
@@ -1592,7 +1592,7 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Obtain my {@link CubeAddress}.
+	 * Obtain the {@link CubeAddress} of a connected Cube.
 	 * 
 	 * @return The <code>CubeAddress</code>
 	 */
@@ -1629,7 +1629,7 @@ public class CubeProtocol
 	 * 
 	 * @param msg
 	 *            The <code>Message</code> to send
-	 * @return whether the <code>Message</code> was sent asynchronously into the Cube
+	 * @return Whether the <code>Message</code> was sent asynchronously into the Cube
 	 * @throws CubeException
 	 *             if the <code>Message</code> does not specify a proper {@link CubeAddress}
 	 */
@@ -1637,9 +1637,11 @@ public class CubeProtocol
 		// Check for idiocy
 		if (null == cubeState)
 			throw new CubeException("send() called on unconnected Cube");
+		if (null == msg)
+			throw new CubeException("send() called with null Message");
 		if (null == msg.peer)
 			throw new CubeException("send() called with null peer CubeAddress");
-		if (BigInteger.ZERO.compareTo(msg.peer) > 0)
+		if (!msg.peer.isUnicast())
 			throw new CubeException("send() called with invalid (negative) peer CubeAddress");
 
 		// Send the message
@@ -1705,8 +1707,8 @@ public class CubeProtocol
 	}
 
 	/**
-	 * Broadcasts {@link Serializable} data through the Cube. This function is efficient, in that each Cube node
-	 * receives a copy of the data exactly once.
+	 * Broadcasts {@link Serializable} data through the Cube. This function is efficient, in the sense that each Cube
+	 * node receives a copy of the data exactly once.
 	 * 
 	 * @param data
 	 *            A {@link Serializable} object to broadcast
@@ -1718,7 +1720,7 @@ public class CubeProtocol
 		if (null == cubeState)
 			throw new CubeException("broadcast() called on unconnected Cube");
 
-		CubeMessage bcastMsg = new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, CubeMessageType.UNICAST_MSG,
+		CubeMessage bcastMsg = new CubeMessage(cubeState.addr, CubeAddress.BCAST_PROCESS, CubeMessageType.BROADCAST_MSG,
 				null, data, cubeState.getDim());
 		return bcastSend(bcastMsg);
 	}
@@ -1755,6 +1757,8 @@ public class CubeProtocol
 		// If we got here, we were successful
 		return true;
 	}
+	
+	// TODO expose a public reverse broadcasting interface
 
 	/**
 	 * Indicate whether a {@link Message} is available to be read.
