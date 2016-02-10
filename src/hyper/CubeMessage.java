@@ -31,7 +31,7 @@ class CubeMessage implements Serializable
 	private BigInteger travel = new BigInteger("-1");
 
 	// Type of message
-	private CubeMessageType type = CubeMessageType.INVALID_MSG;
+	private CubeMessageType type = CubeMessageType.INVALID_FORMAT;
 
 	// Encrypted InetSocketAddress of connecting peer -- used during the connection process
 	private InetSocketAddress peer = null;
@@ -193,7 +193,7 @@ class CubeMessage implements Serializable
 					&& null != peer && peer instanceof InetSocketAddress && null == data;
 		case INVALID_ADDRESS: // FIXME
 		case INVALID_DATA: // FIXME
-		case INVALID_MSG: // FIXME
+		case INVALID_FORMAT: // FIXME
 		case INVALID_STATE: // FIXME
 		case NODE_SHUTDOWN:
 			return true;
@@ -211,8 +211,13 @@ class CubeMessage implements Serializable
 	/**
 	 * Reply to this message's sender that its format is invalid.
 	 */
-	void replyFormat() {
-
+	void replyInvalid(CubeMessageType type) {
+		// We don't need to save any fields, since we're improperly formatted anyway
+		CubeAddress tmp = src;
+		src = dst;
+		dst = tmp;
+		this.type = type;
+		send(channel);
 	}
 
 	/**

@@ -155,15 +155,16 @@ enum CubeMessageType {
 	CONN_INN_GEN_CLEANUP,
 
 	/**
-	 * Failure messages exchanged during multiple phases
+	 * Failure messages exchanged during multiple phases. These should occur only in testing (except for
+	 * INVALID_ADDRESS, which is used by the ANN)
 	 */
 
 	// Invalid message format (including source/destination address)
 	// Src: varies
 	// Dest: varies
 	// Peer: present if present in original message
-	// Data: message type
-	INVALID_MSG,
+	// Data: original message
+	INVALID_FORMAT,
 
 	// Invalid (i.e., unconnected) Cube address
 	// Src: the invalid address
