@@ -49,8 +49,7 @@ public class MessageListener extends Thread
 	 *            <code>anyLocal</code> address.
 	 */
 	public MessageListener(InetSocketAddress local, boolean socks) {
-		try
-		{
+		try {
 			this.local = local;
 
 			ServerSocketChannel svrChan = ServerSocketChannel.open();
@@ -60,15 +59,13 @@ public class MessageListener extends Thread
 			svrChan.configureBlocking(false);
 			svrChan.register(sel, SelectionKey.OP_ACCEPT);
 
-			if (socks)
-			{
+			if (socks) {
 				ServerSocketChannel socksChan = ServerSocketChannel.open();
 				socksChan.bind(this.socks);
 				socksChan.configureBlocking(false);
 				socksChan.register(sel, SelectionKey.OP_ACCEPT);
 			}
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
@@ -83,10 +80,8 @@ public class MessageListener extends Thread
 	// Main loop
 	public void run()
 	{
-		while (true)
-		{
-			try
-			{
+		while (true) {
+			try {
 				// Remove stale connections and determine how long to wait
 				// long wait = removeStales();
 				long wait = 0;
@@ -105,34 +100,27 @@ public class MessageListener extends Thread
 
 				// We have some keys that need attention, process them
 				processKeys();
-			} catch (IOException e)
-			{
+			} catch (IOException e) {
 				e.printStackTrace();
-			} catch (InterruptedException e)
-			{
+			} catch (InterruptedException e) {
 				// Only happens if our Queue runs out of memory and we were interrupted trying to add to it
 				e.printStackTrace();
 			}
 		}
 
 		// Close all connected channels nicely
-		for (SelectionKey key : sel.keys())
-		{
-			try
-			{
+		for (SelectionKey key : sel.keys()) {
+			try {
 				key.channel().close();
-			} catch (IOException e)
-			{
+			} catch (IOException e) {
 				// Ignore errors
 			}
 		}
 
 		// Close the selector
-		try
-		{
+		try {
 			sel.close();
-		} catch (IOException e)
-		{
+		} catch (IOException e) {
 			// Ignore errors
 		}
 	}
@@ -159,24 +147,19 @@ public class MessageListener extends Thread
 		 */
 
 		ArrayList<SocketChannel> reregister = new ArrayList<>();
-		do
-		{
-			for (SelectionKey key : sel.selectedKeys())
-			{
+		do {
+			for (SelectionKey key : sel.selectedKeys()) {
 				sel.selectedKeys().remove(key);
-				if (key.isAcceptable())
-				{
+				if (key.isAcceptable()) {
 					// If someone tries to connect, accept and wait for them to contact us
 					SocketChannel chan = ((ServerSocketChannel) key.channel()).accept();
-					if (null != chan)
-					{
+					if (null != chan) {
 						chan.configureBlocking(false);
 						chan.register(sel, SelectionKey.OP_READ);
 						// timeoutMap.put(System.currentTimeMillis() + acceptTimeout, chan);
 					}
 
-				} else if (key.isReadable())
-				{
+				} else if (key.isReadable()) {
 					// If someone is sending us a CubeMessage, read it
 					SocketChannel chan = (SocketChannel) key.channel();
 
@@ -184,28 +167,25 @@ public class MessageListener extends Thread
 					key.cancel();
 					chan.configureBlocking(true);
 
-					try
-					{
+					try {
 						// Perform the read
 						CubeMessage msg = CubeMessage.recv(chan);
-						if (null != msg)
-						{
+						if (null != msg) {
 							// Schedule it for re-registration
 							reregister.add(chan);
 
 							// Now (finally!) we can process the message
 							protocol.process(msg);
 						}
-					} catch (IOException e)
-					{
-						// Peer may have closed connection
-						if(chan.isOpen())
+					} catch (IOException e) {
+						// Peer may have closed connection, although isConnected() may fail to detect a disconnection
+						// due to the way the TCP/IP stack works
+						if (chan.isConnected())
 							break;
 						protocol.closedCxn(chan);
 						chan.close();
 					}
-				} else
-				{
+				} else {
 					System.err.println(Thread.currentThread() + " goofy key: " + key.readyOps());
 					key.cancel();
 				}
@@ -219,8 +199,7 @@ public class MessageListener extends Thread
 
 		// Now that we really are done processing all active channels, re-register the channels
 		for (SocketChannel sc : reregister)
-			if (sc.isOpen())
-			{
+			if (sc.isOpen()) {
 				// Reset the blocking mode
 				sc.configureBlocking(false);
 				sc.register(sel, SelectionKey.OP_READ);
