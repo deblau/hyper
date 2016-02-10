@@ -39,8 +39,7 @@ public class CubeAddress extends BigInteger
 	/**
 	 * Returns the link by which the other CubeAddress can be reached, or -1 if the other CubeAddress is not a neighbor
 	 */
-	public int relativeLink(CubeAddress other)
-	{
+	int relativeLink(CubeAddress other) {
 		BigInteger xor = xor(other);
 		int link = xor.getLowestSetBit();
 		if (1 == xor.bitCount())
@@ -49,8 +48,19 @@ public class CubeAddress extends BigInteger
 			return -1;
 	}
 
-	public CubeAddress followLink(int index)
-	{
+	/**
+	 * Returns the neighbor CubeAddress on the other side of the indicated link
+	 */
+	CubeAddress followLink(int index) {
 		return new CubeAddress(flipBit(index).toString());
+	}
+
+	boolean isUnicast() {
+		return compareTo(ZERO) >= 0;
+	}
+	
+	boolean isBcast()
+	{
+		return this == BCAST_FORWARD || this == BCAST_PROCESS || this == BCAST_REVERSE;
 	}
 }
