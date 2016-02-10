@@ -10,7 +10,7 @@ import java.nio.channels.SocketChannel;
 class CxnState
 {
 	// The current state of the connection, as seen from this node, as given by the last protocol message sent
-	CubeMessageType state;
+	CubeMessageType state = null;
 
 	// SocketChannel between INN and peer -- used by INN and peer
 	SocketChannel innChan = null;
