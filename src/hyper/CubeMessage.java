@@ -73,7 +73,13 @@ class CubeMessage implements Serializable
 	}
 
 	/**
-	 * Send this message on a {@link SocketChannel}. Should be called only by the {@link CubeProtocol}.
+	 * Send this message on a {@link SocketChannel}.
+	 * <p>
+	 * If <code>false</code> is returned, an {@link IOException} occurred on the underlying channel, usually because our
+	 * neighbor closed it. This will happen often, for example when our neighbor has terminated their application but
+	 * our TCP/IP stack hasn't caught up to this fact yet. Therefore, methods calling this method must not lazily
+	 * disregard its return value. The alternative to monitoring is for this method to pass along the exception, which
+	 * would lead to exception handling code in the protocol engine that would clutter up its clarity.
 	 * 
 	 * @param chan
 	 *            The {@link SocketChannel}
